@@ -129,6 +129,29 @@ export async function getIssue(id, token) {
   return toIssue(data.issue);
 }
 
+export async function getDefaultTeamId(token) {
+  const data = await linearRequest(
+    `
+      query DefaultTeam {
+        teams(first: 1) {
+          nodes {
+            id
+          }
+        }
+      }
+    `,
+    {},
+    token,
+  );
+  const teamId = data.teams?.nodes?.[0]?.id;
+
+  if (!teamId) {
+    throw new Error("Linear workspace has no accessible teams.");
+  }
+
+  return teamId;
+}
+
 export async function createIssue({ title, description, teamId }, token) {
   const data = await linearRequest(
     `
