@@ -2,27 +2,6 @@ import React, { useEffect, useRef, useState } from "react";
 import Results from "./Results.jsx";
 
 const acceptedAudioFormats = ".mp3,.wav,.m4a,.mp4,.ogg,.opus,.webm";
-const linearApiKeyStorageKey = "linear_api_key";
-
-function getStoredLinearApiKey() {
-  try {
-    return window.localStorage.getItem(linearApiKeyStorageKey) || "";
-  } catch {
-    return "";
-  }
-}
-
-function storeLinearApiKey(apiKey) {
-  try {
-    if (apiKey) {
-      window.localStorage.setItem(linearApiKeyStorageKey, apiKey);
-    } else {
-      window.localStorage.removeItem(linearApiKeyStorageKey);
-    }
-  } catch {
-    // The setting remains usable for this session when storage is unavailable.
-  }
-}
 
 function getRecordingMimeType() {
   if (MediaRecorder.isTypeSupported("audio/webm")) {
@@ -50,22 +29,48 @@ async function readApiResponse(response, fallbackError) {
   return result;
 }
 
+function getRecordingFileName(mimeType) {
+  return mimeType.startsWith("audio/mp4") ? "recording.mp4" : "recording.webm";
+}
+
+async function transcribeAudio(audio, filename, interim = false) {
+  const formData = new FormData();
+  formData.append("audio", audio, filename);
+
+  if (interim) {
+    formData.append("interim", "1");
+  }
+
+  const response = await fetch("/api/transcribe", {
+    method: "POST",
+    body: formData,
+  });
+  const result = await readApiResponse(response, "Transcription failed.");
+
+  if (typeof result?.transcript !== "string") {
+    throw new Error("The transcription service returned no transcript.");
+  }
+
+  return result.transcript;
+}
+
 export default function App() {
   const [transcript, setTranscript] = useState("");
   const [audioInput, setAudioInput] = useState(null);
   const [debriefResult, setDebriefResult] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [isFinalizingRecording, setIsFinalizingRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
-  const [isEnriching, setIsEnriching] = useState(false);
   const [recordingError, setRecordingError] = useState("");
   const [requestError, setRequestError] = useState("");
-  const [enrichmentWarning, setEnrichmentWarning] = useState("");
   const [copyStatus, setCopyStatus] = useState("idle");
-  const [linearApiKey, setLinearApiKey] = useState(getStoredLinearApiKey);
   const mediaRecorderRef = useRef(null);
   const mediaStreamRef = useRef(null);
   const audioChunksRef = useRef([]);
+  const recordingRequestInFlightRef = useRef(false);
+  const recordingRequestPromiseRef = useRef(Promise.resolve());
+  const recordingFailedRef = useRef(false);
   const copyResetTimeoutRef = useRef(null);
 
   useEffect(() => {
@@ -80,7 +85,38 @@ export default function App() {
     mediaStreamRef.current = null;
   };
 
+  const replaceTranscript = (nextTranscript) => {
+    setTranscript(nextTranscript);
+    setDebriefResult(null);
+    setCopyStatus("idle");
+    setRequestError("");
+  };
+
+  const requestRollingTranscript = (mimeType) => {
+    if (recordingRequestInFlightRef.current || audioChunksRef.current.length === 0) {
+      return;
+    }
+
+    const audio = new Blob([...audioChunksRef.current], { type: mimeType });
+    recordingRequestInFlightRef.current = true;
+
+    const request = transcribeAudio(audio, getRecordingFileName(mimeType), true)
+      .then(replaceTranscript)
+      .catch((error) => {
+        setRequestError(error instanceof Error ? error.message : "Transcription failed.");
+      })
+      .finally(() => {
+        recordingRequestInFlightRef.current = false;
+      });
+
+    recordingRequestPromiseRef.current = request;
+  };
+
   const startRecording = async () => {
+    if (isRecording || isFinalizingRecording || isTranscribing) {
+      return;
+    }
+
     setRecordingError("");
     setRequestError("");
 
@@ -97,29 +133,60 @@ export default function App() {
 
       mediaRecorderRef.current = recorder;
       audioChunksRef.current = [];
+      recordingRequestInFlightRef.current = false;
+      recordingRequestPromiseRef.current = Promise.resolve();
+      recordingFailedRef.current = false;
       setAudioInput(null);
+      setTranscript("");
+      setDebriefResult(null);
+      setCopyStatus("idle");
 
       recorder.addEventListener("dataavailable", (event) => {
         if (event.data.size > 0) {
           audioChunksRef.current.push(event.data);
+
+          if (recorder.state === "recording") {
+            const recordedMimeType = recorder.mimeType || mimeType || "audio/webm";
+            requestRollingTranscript(recordedMimeType);
+          }
         }
       });
 
       recorder.addEventListener(
         "stop",
-        () => {
+        async () => {
           const recordedMimeType = recorder.mimeType || mimeType || "audio/webm";
-          const blob = new Blob(audioChunksRef.current, { type: recordedMimeType });
-          const extension = recordedMimeType.startsWith("audio/mp4") ? "mp4" : "webm";
-
-          setAudioInput({
-            audio: blob,
-            name: `recording.${extension}`,
-            source: "recording",
-          });
           setIsRecording(false);
           mediaRecorderRef.current = null;
           stopMediaStream();
+
+          if (recordingFailedRef.current) {
+            return;
+          }
+
+          setIsFinalizingRecording(true);
+
+          try {
+            await recordingRequestPromiseRef.current;
+
+            if (audioChunksRef.current.length === 0) {
+              throw new Error("The recording did not contain any audio.");
+            }
+
+            const audio = new Blob([...audioChunksRef.current], { type: recordedMimeType });
+            recordingRequestInFlightRef.current = true;
+            const finalTranscript = await transcribeAudio(
+              audio,
+              getRecordingFileName(recordedMimeType),
+            );
+
+            replaceTranscript(finalTranscript);
+          } catch (error) {
+            setRequestError(error instanceof Error ? error.message : "Transcription failed.");
+          } finally {
+            recordingRequestInFlightRef.current = false;
+            setIsFinalizingRecording(false);
+          }
         },
         { once: true },
       );
@@ -127,14 +194,13 @@ export default function App() {
       recorder.addEventListener(
         "error",
         () => {
+          recordingFailedRef.current = true;
           setRecordingError("Recording failed. Please try again or upload an audio file.");
-          setIsRecording(false);
-          stopMediaStream();
         },
         { once: true },
       );
 
-      recorder.start();
+      recorder.start(4_000);
       setIsRecording(true);
     } catch (error) {
       stopMediaStream();
@@ -174,7 +240,7 @@ export default function App() {
 
       if (isRecording) {
         stopRecording();
-      } else {
+      } else if (!isFinalizingRecording && !isTranscribing) {
         startRecording();
       }
     };
@@ -184,7 +250,7 @@ export default function App() {
     return () => {
       window.removeEventListener("keydown", handleGlobalKeyDown);
     };
-  }, [isRecording]);
+  }, [isFinalizingRecording, isRecording, isTranscribing]);
 
   const handleFileChange = (event) => {
     const file = event.target.files?.[0];
@@ -199,7 +265,7 @@ export default function App() {
   };
 
   const handleTranscribe = async () => {
-    if (!audioInput || isTranscribing) {
+    if (!audioInput || audioInput.source !== "upload" || isTranscribing) {
       return;
     }
 
@@ -207,23 +273,8 @@ export default function App() {
     setIsTranscribing(true);
 
     try {
-      const formData = new FormData();
-      formData.append("audio", audioInput.audio, audioInput.name);
-
-      const response = await fetch("/api/transcribe", {
-        method: "POST",
-        body: formData,
-      });
-      const result = await readApiResponse(response, "Transcription failed.");
-
-      if (typeof result?.transcript !== "string") {
-        throw new Error("The transcription service returned no transcript.");
-      }
-
-      setTranscript(result.transcript);
-      setDebriefResult(null);
-      setEnrichmentWarning("");
-      setCopyStatus("idle");
+      const nextTranscript = await transcribeAudio(audioInput.audio, audioInput.name);
+      replaceTranscript(nextTranscript);
     } catch (error) {
       setRequestError(error instanceof Error ? error.message : "Transcription failed.");
     } finally {
@@ -234,16 +285,8 @@ export default function App() {
   const handleTranscriptChange = (event) => {
     setTranscript(event.target.value);
     setDebriefResult(null);
-    setEnrichmentWarning("");
     setCopyStatus("idle");
     setRequestError("");
-  };
-
-  const handleLinearApiKeyChange = (event) => {
-    const apiKey = event.target.value;
-
-    setLinearApiKey(apiKey);
-    storeLinearApiKey(apiKey);
   };
 
   const handleCreateDebrief = async () => {
@@ -254,7 +297,6 @@ export default function App() {
     }
 
     setRequestError("");
-    setEnrichmentWarning("");
     setDebriefResult(null);
     setIsThinking(true);
 
@@ -268,52 +310,6 @@ export default function App() {
 
       setDebriefResult(result);
       setCopyStatus("idle");
-      setIsThinking(false);
-
-      const apiKey = linearApiKey.trim();
-
-      if (apiKey) {
-        setIsEnriching(true);
-
-        try {
-          const enrichResponse = await fetch("/api/enrich", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "X-Linear-Api-Key": apiKey,
-            },
-            body: JSON.stringify({
-              items: result.items,
-              recap_line: result.recap_line,
-              detected_language: result.detected_language,
-            }),
-          });
-          const enrichedResult = await readApiResponse(
-            enrichResponse,
-            "The enrichment request failed.",
-          );
-
-          if (!Array.isArray(enrichedResult?.items)) {
-            throw new Error("The Linear linking service returned no items.");
-          }
-
-          setDebriefResult((currentResult) =>
-            currentResult === result
-              ? {
-                  ...result,
-                  ...enrichedResult,
-                  items: enrichedResult.items,
-                }
-              : currentResult,
-          );
-        } catch (error) {
-          setEnrichmentWarning(
-            `Linear linking failed: ${error instanceof Error ? error.message : "Unknown error."}`,
-          );
-        } finally {
-          setIsEnriching(false);
-        }
-      }
     } catch (error) {
       setRequestError(error instanceof Error ? error.message : "Debrief generation failed.");
     } finally {
@@ -352,39 +348,6 @@ export default function App() {
           </p>
         </header>
 
-        <details className="group mx-auto mt-6 max-w-3xl rounded-xl border border-slate-800 bg-slate-900/50">
-          <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 text-sm font-medium text-slate-300 [&::-webkit-details-marker]:hidden">
-            <span>Settings</span>
-            <span className="flex items-center gap-2 text-xs text-slate-500">
-              Linear
-              <span
-                aria-hidden="true"
-                className="text-sm transition-transform group-open:rotate-180"
-              >
-                ▾
-              </span>
-            </span>
-          </summary>
-          <div className="border-t border-slate-800 px-4 py-4">
-            <label htmlFor="linear-api-key" className="text-sm font-medium text-slate-300">
-              Linear API key
-            </label>
-            <input
-              id="linear-api-key"
-              type="password"
-              value={linearApiKey}
-              onChange={handleLinearApiKeyChange}
-              autoComplete="off"
-              spellCheck="false"
-              placeholder="lin_api_…"
-              className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20"
-            />
-            <p className="mt-1.5 text-xs text-slate-500">
-              Stored locally, sent only to your own server.
-            </p>
-          </div>
-        </details>
-
         <div className="mt-10 grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
           <section className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-black/20 sm:p-7">
             <div className="flex items-center justify-between gap-4">
@@ -394,10 +357,10 @@ export default function App() {
                 </p>
                 <h2 className="mt-2 text-xl font-semibold">Add audio</h2>
               </div>
-              {isRecording && (
+              {(isRecording || isFinalizingRecording) && (
                 <span className="inline-flex items-center gap-2 rounded-full bg-rose-500/10 px-3 py-1 text-xs font-semibold text-rose-300 ring-1 ring-inset ring-rose-500/30">
                   <span className="h-2 w-2 animate-pulse rounded-full bg-rose-400" />
-                  Recording
+                  {isRecording ? "Recording" : "Finalizing"}
                 </span>
               )}
             </div>
@@ -423,10 +386,18 @@ export default function App() {
                     <button
                       type="button"
                       onClick={startRecording}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:ring-offset-2 focus:ring-offset-slate-950"
+                      disabled={isFinalizingRecording || isTranscribing}
+                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:ring-offset-2 focus:ring-offset-slate-950 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
                     >
-                      <span className="h-3 w-3 rounded-full bg-slate-950" />
-                      Start recording
+                      {isFinalizingRecording ? (
+                        <span
+                          aria-hidden="true"
+                          className="h-4 w-4 animate-spin rounded-full border-2 border-slate-500 border-t-transparent"
+                        />
+                      ) : (
+                        <span className="h-3 w-3 rounded-full bg-slate-950" />
+                      )}
+                      {isFinalizingRecording ? "Finalizing…" : "Start recording"}
                     </button>
                   )}
                   <p className="mt-2 text-center text-xs text-slate-500">or press Space</p>
@@ -451,7 +422,7 @@ export default function App() {
                   type="file"
                   accept={acceptedAudioFormats}
                   onChange={handleFileChange}
-                  disabled={isRecording}
+                  disabled={isRecording || isFinalizingRecording}
                   className="sr-only"
                 />
               </label>
@@ -490,7 +461,7 @@ export default function App() {
             <button
               type="button"
               onClick={handleTranscribe}
-              disabled={!audioInput || isRecording || isTranscribing}
+              disabled={!audioInput || isRecording || isFinalizingRecording || isTranscribing}
               className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:ring-offset-2 focus:ring-offset-slate-950 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
             >
               {isTranscribing && (
@@ -499,7 +470,7 @@ export default function App() {
                   className="h-4 w-4 animate-spin rounded-full border-2 border-slate-500 border-t-transparent"
                 />
               )}
-              {isTranscribing ? "Transcribing…" : "Transcribe"}
+              {isTranscribing ? "Transcribing…" : "Transcribe upload"}
             </button>
           </section>
 
@@ -515,9 +486,25 @@ export default function App() {
               </p>
             </div>
 
-            <label htmlFor="transcript" className="mt-6 text-sm font-medium text-slate-300">
-              Transcript
-            </label>
+            <div className="mt-6 flex items-center justify-between gap-3">
+              <label htmlFor="transcript" className="text-sm font-medium text-slate-300">
+                Transcript
+              </label>
+              {isRecording && (
+                <span
+                  role="status"
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-cyan-400/80"
+                >
+                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-400" />
+                  live…
+                </span>
+              )}
+              {isFinalizingRecording && (
+                <span role="status" className="text-xs font-medium text-slate-400">
+                  finalizing…
+                </span>
+              )}
+            </div>
             <textarea
               id="transcript"
               value={transcript}
@@ -563,9 +550,6 @@ export default function App() {
             result={debriefResult}
             copyStatus={copyStatus}
             onCopy={handleCopyDraft}
-            isEnriching={isEnriching}
-            enrichmentWarning={enrichmentWarning}
-            onDismissEnrichmentWarning={() => setEnrichmentWarning("")}
           />
         )}
       </div>

@@ -50,6 +50,8 @@ router.post("/transcribe", upload.single("audio"), async (req, res) => {
 
   const mimeType = req.file.mimetype.split(";", 1)[0].trim().toLowerCase();
   const isChunked = mimeType === "video/mp4" || req.file.size > LONG_MEDIA_THRESHOLD_BYTES;
+  const transcriptionModel =
+    req.body?.interim === "1" ? "gpt-4o-mini-transcribe" : "gpt-4o-transcribe";
   const transcriptionTimeoutMs = isChunked ? 180_000 : 45_000;
 
   try {
@@ -93,7 +95,7 @@ router.post("/transcribe", upload.single("audio"), async (req, res) => {
       const transcription = await openai.audio.transcriptions.create(
         {
           file: audioFile,
-          model: "gpt-4o-transcribe",
+          model: transcriptionModel,
         },
         {
           timeout: transcriptionTimeoutMs,
