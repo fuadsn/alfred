@@ -1,4 +1,4 @@
-# Debrief
+# Alfred
 
 ## Setup
 
@@ -25,9 +25,9 @@ Open [http://localhost:5173](http://localhost:5173). Vite proxies `/api` request
 
 ## Input paths
 
-- **Record:** start the microphone, stop when finished, then click **Transcribe**.
-- **Upload:** choose an MP3, WAV, M4A, MP4, OGG, OPUS, or WEBM file, then click **Transcribe**.
-- **Paste:** paste or type directly into the transcript textarea, edit as needed, then click **Create debrief**.
+- **Record:** start the microphone to see a rolling transcript; stopping runs a final accuracy pass.
+- **Upload:** choose an MP3, WAV, M4A, MP4, OGG, OPUS, or WEBM file, then click **Transcribe upload**.
+- **Paste:** paste or type directly into the transcript textarea, edit as needed, then click **Create recap**.
 
 All three paths use the same editable transcript textarea before generating results.
 
@@ -35,7 +35,7 @@ All three paths use the same editable transcript textarea before generating resu
 
 Linear enrichment is optional. Provide a personal Linear API key either as `LINEAR_API_KEY` in `.env` or in the app's collapsible **Settings** row. The in-app key is stored in the browser's local storage and sent only to this app's server when enrichment runs.
 
-After a debrief is generated, enrichment searches the connected Linear workspace for action-item references. It prefers linking an existing issue, can create an issue when no confident match exists, and can update an existing issue when the action explicitly requires a change. Enrichment failures leave the original debrief intact.
+After a recap is generated, enrichment searches the connected Linear workspace for action-item references. It prefers linking an existing issue, can create an issue when no confident match exists, and can update an existing issue when the action explicitly requires a change. Enrichment failures leave the original recap intact.
 
 **Warning:** create and update actions write to real issues in the connected Linear workspace. Use a workspace and API key where those changes are intended.
 

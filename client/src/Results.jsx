@@ -4,27 +4,27 @@ export const RESULT_CATEGORIES = [
   {
     key: "decision",
     title: "Decisions",
-    dotClass: "bg-cyan-400",
-    countClass: "bg-cyan-400/10 text-cyan-300 ring-cyan-400/20",
+    dotClass: "bg-black",
+    countClass: "border-black bg-white text-black",
   },
   {
     key: "open_question",
     title: "Open Questions",
-    dotClass: "bg-amber-400",
-    countClass: "bg-amber-400/10 text-amber-300 ring-amber-400/20",
+    dotClass: "bg-black",
+    countClass: "border-black bg-white text-black",
   },
   {
     key: "action_item",
     title: "Action Items",
-    dotClass: "bg-emerald-400",
-    countClass: "bg-emerald-400/10 text-emerald-300 ring-emerald-400/20",
+    dotClass: "bg-black",
+    countClass: "border-black bg-white text-black",
   },
 ];
 
 const LINEAR_ACTION_STYLES = {
-  linked: "bg-cyan-400/10 text-cyan-300 ring-cyan-400/25",
-  created: "bg-emerald-400/10 text-emerald-300 ring-emerald-400/25",
-  updated: "bg-violet-400/10 text-violet-300 ring-violet-400/25",
+  linked: "border-black bg-black text-white group-hover:border-white group-hover:bg-white group-hover:text-black",
+  created: "border-black bg-black text-white group-hover:border-white group-hover:bg-white group-hover:text-black",
+  updated: "border-black bg-black text-white group-hover:border-white group-hover:bg-white group-hover:text-black",
 };
 
 export function groupItems(items) {
@@ -85,13 +85,13 @@ export default function Results({
   const draft = assembleDraft(items, result.recap_line);
 
   return (
-    <section className="mt-8 rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-black/20 sm:p-8">
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+    <section className="mt-20 border-t-4 border-black pb-20">
+      <div className="inverted-lines flex flex-col gap-6 bg-black px-6 py-10 text-white sm:flex-row sm:items-end sm:justify-between sm:px-8 lg:px-12">
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-400">
-            Debrief complete
+          <p className="font-mono text-xs font-semibold uppercase tracking-widest">
+            Analysis complete
           </p>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight sm:text-3xl">
+          <h2 className="mt-3 font-display text-4xl font-semibold leading-none tracking-tight sm:text-5xl">
             What came out of the session
           </h2>
         </div>
@@ -99,16 +99,16 @@ export default function Results({
           {isEnriching && (
             <span
               role="status"
-              className="inline-flex items-center gap-2 rounded-full bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 ring-1 ring-inset ring-cyan-400/20"
+              className="inline-flex min-h-11 items-center gap-2 border-2 border-white bg-black px-3 py-2 font-mono text-[10px] font-semibold uppercase tracking-widest text-white"
             >
               <span
                 aria-hidden="true"
-                className="h-3 w-3 animate-spin rounded-full border-2 border-cyan-300/40 border-t-cyan-300"
+                className="h-3 w-3 animate-spin border-2 border-white border-t-black"
               />
               Linking to Linear…
             </span>
           )}
-          <span className="w-fit rounded-full bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-300 ring-1 ring-inset ring-slate-700">
+          <span className="inline-flex min-h-11 w-fit items-center border-2 border-white px-3 py-2 font-mono text-[10px] font-semibold uppercase tracking-widest text-white">
             {result.detected_language}
           </span>
         </div>
@@ -117,13 +117,13 @@ export default function Results({
       {enrichmentWarning && (
         <div
           role="alert"
-          className="mt-5 flex items-start justify-between gap-4 rounded-xl bg-amber-400/10 px-4 py-3 text-sm text-amber-200 ring-1 ring-inset ring-amber-400/20"
+          className="mt-8 flex items-start justify-between gap-4 border-2 border-black bg-muted px-5 py-4 text-base"
         >
           <span>{enrichmentWarning}</span>
           <button
             type="button"
             onClick={onDismissEnrichmentWarning}
-            className="shrink-0 font-semibold text-amber-300 transition hover:text-amber-100"
+            className="min-h-11 shrink-0 px-3 font-mono text-[10px] font-semibold uppercase tracking-widest underline underline-offset-4 transition-colors duration-100 hover:bg-black hover:text-white"
             aria-label="Dismiss Linear linking warning"
           >
             Dismiss
@@ -131,22 +131,22 @@ export default function Results({
         </div>
       )}
 
-      <div className="mt-7 grid gap-5 lg:grid-cols-3">
+      <div className="mt-12 grid gap-6 lg:grid-cols-3">
         {RESULT_CATEGORIES.map((category) => {
           const categoryItems = groupedItems[category.key];
 
           return (
             <section
               key={category.key}
-              className="rounded-2xl border border-slate-800 bg-slate-950/50 p-4 sm:p-5"
+              className="border-2 border-black bg-white p-5 sm:p-6"
             >
               <div className="flex items-center justify-between gap-3">
-                <h3 className="flex items-center gap-2.5 font-semibold text-slate-100">
-                  <span className={`h-2.5 w-2.5 rounded-full ${category.dotClass}`} />
+                <h3 className="flex items-center gap-3 font-display text-2xl font-semibold leading-none">
+                  <span className={`h-3 w-3 ${category.dotClass}`} />
                   {category.title}
                 </h3>
                 <span
-                  className={`rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${category.countClass}`}
+                  className={`border px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-widest ${category.countClass}`}
                 >
                   {categoryItems.length}
                 </span>
@@ -164,21 +164,21 @@ export default function Results({
                     return (
                       <article
                         key={`${category.key}-${index}-${item.text}`}
-                        className="rounded-xl border border-slate-800 bg-slate-900/80 p-4"
+                        className="group border border-black bg-white p-5 transition-colors duration-100 hover:bg-black hover:text-white"
                       >
-                        <h4 className="text-base font-semibold leading-6 text-slate-100">
+                        <h4 className="text-lg font-semibold leading-snug">
                           {item.text}
                         </h4>
                         {category.key === "action_item" && linearAction && linearStyle && (
-                          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                          <div className="mt-4 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-widest">
                             <span
-                              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-semibold ring-1 ring-inset ${linearStyle}`}
+                              className={`inline-flex items-center gap-1.5 border px-2.5 py-1 font-semibold ${linearStyle}`}
                             >
                               <a
                                 href={item.linear.url}
                                 target="_blank"
                                 rel="noreferrer"
-                                className="underline decoration-current/40 underline-offset-2 hover:decoration-current"
+                                className="inline-flex min-h-11 items-center underline decoration-current/40 underline-offset-2 hover:decoration-current"
                               >
                                 {item.linear.identifier}
                               </a>
@@ -187,24 +187,26 @@ export default function Results({
                             </span>
                             <span
                               title="Linear match confidence"
-                              className="text-[11px] font-medium text-slate-500"
+                              className="text-[10px] font-medium text-muted-foreground group-hover:text-white"
                             >
                               {confidence}%
                             </span>
                           </div>
                         )}
-                        <p className="mt-3 text-sm leading-6 text-slate-400">
-                          <span className="font-semibold text-slate-300">why:</span>{" "}
+                        <p className="mt-4 text-base leading-relaxed text-muted-foreground group-hover:text-white">
+                          <span className="font-mono text-[10px] font-semibold uppercase tracking-widest text-black group-hover:text-white">
+                            why:
+                          </span>{" "}
                           {item.reasoning}
                         </p>
-                        <blockquote className="mt-3 border-l-2 border-slate-700 pl-3 text-sm italic leading-6 text-slate-500">
+                        <blockquote className="mt-4 border-l-2 border-black pl-4 text-base italic leading-relaxed text-muted-foreground group-hover:border-white group-hover:text-white">
                           “{item.source_quote}”
                         </blockquote>
                       </article>
                     );
                   })
                 ) : (
-                  <div className="rounded-xl border border-dashed border-slate-800 px-4 py-8 text-center text-sm text-slate-600">
+                  <div className="border border-dashed border-black bg-muted px-4 py-10 text-center font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
                     None identified
                   </div>
                 )}
@@ -215,32 +217,37 @@ export default function Results({
       </div>
 
       {typeof result.enrichment_notes === "string" && result.enrichment_notes.trim() && (
-        <p className="mt-4 text-sm leading-6 text-slate-500">{result.enrichment_notes.trim()}</p>
+        <p className="mt-6 border-l-4 border-black bg-muted px-5 py-4 text-base leading-relaxed text-muted-foreground">
+          {result.enrichment_notes.trim()}
+        </p>
       )}
 
-      <div className="mt-8 border-t border-slate-800 pt-7">
+      <div className="mt-16 border-t-4 border-black pt-12">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h3 className="text-xl font-semibold text-slate-100">Ready-to-send Slack recap</h3>
-            <p className="mt-1 text-sm text-slate-400">
+            <p className="font-mono text-xs font-semibold uppercase tracking-widest">Draft / 001</p>
+            <h3 className="mt-3 font-display text-4xl font-semibold leading-none tracking-tight sm:text-5xl">
+              Ready-to-send Slack recap
+            </h3>
+            <p className="mt-3 text-lg leading-relaxed text-muted-foreground">
               Deterministically assembled from the classified items above.
             </p>
           </div>
           <button
             type="button"
             onClick={() => onCopy(draft)}
-            className="inline-flex min-w-28 items-center justify-center rounded-xl border border-slate-700 bg-slate-800 px-4 py-2.5 text-sm font-semibold text-slate-100 transition hover:border-slate-600 hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:ring-offset-2 focus:ring-offset-slate-950"
+            className="inline-flex min-h-11 min-w-36 items-center justify-center border-2 border-black bg-white px-6 py-3 font-mono text-xs font-semibold uppercase tracking-widest text-black transition-colors duration-100 hover:bg-black hover:text-white"
             aria-live="polite"
           >
             {copyStatus === "copied"
               ? "Copied!"
               : copyStatus === "error"
                 ? "Copy failed"
-                : "Copy draft"}
+                : "Copy draft →"}
           </button>
         </div>
 
-        <pre className="mt-4 overflow-x-auto whitespace-pre-wrap rounded-2xl border border-slate-800 bg-slate-950/90 p-5 font-mono text-sm leading-7 text-slate-300">
+        <pre className="mt-6 overflow-x-auto whitespace-pre-wrap border-2 border-black bg-muted p-6 font-mono text-sm leading-7 text-black sm:p-8">
           {draft}
         </pre>
       </div>

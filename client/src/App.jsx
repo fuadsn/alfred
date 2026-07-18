@@ -306,12 +306,12 @@ export default function App() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ transcript: trimmedTranscript }),
       });
-      const result = await readApiResponse(response, "Debrief generation failed.");
+      const result = await readApiResponse(response, "Recap generation failed.");
 
       setDebriefResult(result);
       setCopyStatus("idle");
     } catch (error) {
-      setRequestError(error instanceof Error ? error.message : "Debrief generation failed.");
+      setRequestError(error instanceof Error ? error.message : "Recap generation failed.");
     } finally {
       setIsThinking(false);
     }
@@ -333,53 +333,81 @@ export default function App() {
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 px-5 py-10 text-slate-100 sm:px-8 sm:py-14">
-      <div className="mx-auto max-w-6xl">
-        <header className="mx-auto max-w-3xl text-center">
-          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-cyan-400">
-            Debrief
-          </p>
-          <h1 className="mt-4 text-4xl font-bold tracking-tight sm:text-5xl">
-            Voice note in. Clear recap out.
+    <main className="min-h-screen bg-white font-body text-black">
+      <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-12">
+        <header className="border-b-4 border-black pb-12 pt-8 sm:pb-16 sm:pt-12">
+          <div className="flex items-center justify-between gap-4 font-mono text-[10px] font-medium uppercase tracking-[0.25em] sm:text-xs">
+            <span>Voice → Structure</span>
+            <span className="inverted-lines border-2 border-black px-3 py-2 text-white">
+              Alfred / 001
+            </span>
+          </div>
+          <h1 className="mt-10 font-display text-5xl font-semibold leading-none tracking-tighter sm:text-8xl lg:text-9xl">
+            Alfred
           </h1>
-          <p className="mx-auto mt-5 max-w-2xl text-base leading-7 text-slate-400 sm:text-lg">
-            Record a quick note, upload audio, or paste a transcript. Everything meets in one
-            editable workspace before the debrief is created.
-          </p>
+          <div className="mt-8 flex items-center gap-4" aria-hidden="true">
+            <span className="h-1 flex-1 bg-black" />
+            <span className="h-5 w-5 border-2 border-black" />
+          </div>
+          <div className="mt-10 grid gap-6 lg:grid-cols-[1fr_0.72fr] lg:items-end">
+            <h2 className="max-w-3xl font-display text-4xl font-semibold leading-none tracking-tight sm:text-5xl">
+              Voice note in. Clear recap out.
+            </h2>
+            <p className="max-w-xl text-lg leading-relaxed text-muted-foreground">
+              Record a quick note, upload audio, or paste a transcript. Everything meets in one
+              editable workspace before Alfred creates the recap.
+            </p>
+          </div>
         </header>
 
-        <div className="mt-10 grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
-          <section className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-black/20 sm:p-7">
+        <div className="grid lg:grid-cols-2">
+          <section className="py-12 lg:pr-12">
             <div className="flex items-center justify-between gap-4">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-400">
+                <p className="font-mono text-xs font-semibold uppercase tracking-widest">
                   Step 1
                 </p>
-                <h2 className="mt-2 text-xl font-semibold">Add audio</h2>
+                <h2 className="mt-3 font-display text-4xl font-semibold leading-none tracking-tight sm:text-5xl">
+                  Add audio
+                </h2>
               </div>
               {(isRecording || isFinalizingRecording) && (
-                <span className="inline-flex items-center gap-2 rounded-full bg-rose-500/10 px-3 py-1 text-xs font-semibold text-rose-300 ring-1 ring-inset ring-rose-500/30">
-                  <span className="h-2 w-2 animate-pulse rounded-full bg-rose-400" />
+                <span className="inverted-lines inline-flex min-h-11 items-center gap-2 border-2 border-black px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-widest text-white">
+                  <span className="h-2 w-2 animate-pulse bg-white" />
                   {isRecording ? "Recording" : "Finalizing"}
                 </span>
               )}
             </div>
 
-            <div className="mt-6 space-y-4">
-              <div className="rounded-2xl border border-slate-800 bg-slate-950/60 p-5">
-                <h3 className="font-medium text-slate-100">Record with your microphone</h3>
-                <p className="mt-1 text-sm leading-6 text-slate-400">
+            <div className="mt-10 space-y-5">
+              <div
+                className={`border-2 p-6 ${
+                  isRecording || isFinalizingRecording
+                    ? "inverted-lines border-black text-white"
+                    : "border-black bg-white"
+                }`}
+              >
+                <h3 className="font-display text-2xl font-semibold leading-tight">
+                  Record with your microphone
+                </h3>
+                <p
+                  className={`mt-2 text-base leading-relaxed ${
+                    isRecording || isFinalizingRecording
+                      ? "text-white opacity-70"
+                      : "text-muted-foreground"
+                  }`}
+                >
                   Capture a fresh voice note directly in your browser.
                 </p>
 
-                <div className="mt-4">
+                <div className="mt-6">
                   {isRecording ? (
                     <button
                       type="button"
                       onClick={stopRecording}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-rose-500 px-4 py-3 text-sm font-semibold text-white transition hover:bg-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-400 focus:ring-offset-2 focus:ring-offset-slate-950"
+                      className="group/stop inline-flex min-h-11 w-full items-center justify-center gap-3 border-2 border-white bg-white px-8 py-4 font-mono text-sm font-semibold uppercase tracking-widest text-black transition-colors duration-100 hover:bg-black hover:text-white"
                     >
-                      <span className="h-2.5 w-2.5 rounded-sm bg-white" />
+                      <span className="h-2.5 w-2.5 bg-black group-hover/stop:bg-white" />
                       Stop recording
                     </button>
                   ) : (
@@ -387,36 +415,38 @@ export default function App() {
                       type="button"
                       onClick={startRecording}
                       disabled={isFinalizingRecording || isTranscribing}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-400 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:ring-offset-2 focus:ring-offset-slate-950 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
+                      className="group/start inline-flex min-h-11 w-full items-center justify-center gap-3 border-2 border-black bg-black px-8 py-4 font-mono text-sm font-semibold uppercase tracking-widest text-white transition-colors duration-100 hover:bg-white hover:text-black disabled:cursor-not-allowed disabled:border-muted disabled:bg-muted disabled:text-muted-foreground"
                     >
                       {isFinalizingRecording ? (
                         <span
                           aria-hidden="true"
-                          className="h-4 w-4 animate-spin rounded-full border-2 border-slate-500 border-t-transparent"
+                          className="h-4 w-4 animate-spin border-2 border-muted-foreground border-t-transparent"
                         />
                       ) : (
-                        <span className="h-3 w-3 rounded-full bg-slate-950" />
+                        <span className="h-3 w-3 border-2 border-white group-hover/start:border-black" />
                       )}
-                      {isFinalizingRecording ? "Finalizing…" : "Start recording"}
+                      {isFinalizingRecording ? "Finalizing…" : "Start recording →"}
                     </button>
                   )}
-                  <p className="mt-2 text-center text-xs text-slate-500">or press Space</p>
+                  <p className="mt-3 text-center font-mono text-[10px] uppercase tracking-widest opacity-70">
+                    or press Space
+                  </p>
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 text-xs font-medium uppercase tracking-[0.18em] text-slate-600">
-                <span className="h-px flex-1 bg-slate-800" />
+              <div className="flex items-center gap-3 font-mono text-[10px] font-medium uppercase tracking-widest text-muted-foreground">
+                <span className="h-px flex-1 bg-black" />
                 or
-                <span className="h-px flex-1 bg-slate-800" />
+                <span className="h-px flex-1 bg-black" />
               </div>
 
-              <label className="block cursor-pointer rounded-2xl border border-dashed border-slate-700 bg-slate-950/40 p-5 transition hover:border-cyan-500/70 hover:bg-slate-950/70 focus-within:border-cyan-400 focus-within:ring-2 focus-within:ring-cyan-400/30">
-                <span className="block font-medium text-slate-100">Upload an audio file</span>
-                <span className="mt-1 block text-sm leading-6 text-slate-400">
+              <label className="group/upload block cursor-pointer border-2 border-dashed border-black bg-white p-6 transition-colors duration-100 hover:bg-black hover:text-white focus-within:border-4 focus-within:outline focus-within:outline-[3px] focus-within:outline-offset-[3px] focus-within:outline-black">
+                <span className="block font-display text-2xl font-semibold">Upload an audio file</span>
+                <span className="mt-2 block font-mono text-[10px] uppercase leading-relaxed tracking-widest text-muted-foreground group-hover/upload:text-white">
                   MP3, WAV, M4A, MP4, OGG, OPUS, or WEBM
                 </span>
-                <span className="mt-4 inline-flex rounded-lg border border-slate-700 bg-slate-800 px-3 py-2 text-sm font-semibold text-slate-200">
-                  Choose file
+                <span className="mt-5 inline-flex min-h-11 items-center border-2 border-black bg-white px-4 py-2 font-mono text-xs font-semibold uppercase tracking-widest text-black group-hover/upload:border-white">
+                  Choose file →
                 </span>
                 <input
                   type="file"
@@ -429,17 +459,19 @@ export default function App() {
             </div>
 
             {recordingError && (
-              <p role="alert" className="mt-4 rounded-xl bg-rose-500/10 px-4 py-3 text-sm text-rose-300">
+              <p role="alert" className="mt-5 border-l-4 border-black bg-muted px-5 py-4 text-base">
                 {recordingError}
               </p>
             )}
 
-            <div className="mt-5 min-h-14 rounded-xl border border-slate-800 bg-slate-950/50 px-4 py-3">
+            <div className="mt-5 min-h-14 border border-black bg-white px-4 py-3">
               {audioInput ? (
                 <div className="flex items-center justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate text-sm font-medium text-slate-200">{audioInput.name}</p>
-                    <p className="mt-0.5 text-xs capitalize text-slate-500">{audioInput.source} ready</p>
+                    <p className="truncate text-base font-semibold">{audioInput.name}</p>
+                    <p className="mt-1 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                      {audioInput.source} ready
+                    </p>
                   </div>
                   <button
                     type="button"
@@ -448,13 +480,13 @@ export default function App() {
                       setRequestError("");
                     }}
                     disabled={isTranscribing}
-                    className="shrink-0 text-xs font-semibold text-slate-400 transition hover:text-slate-200"
+                    className="min-h-11 shrink-0 px-3 font-mono text-[10px] font-semibold uppercase tracking-widest underline decoration-1 underline-offset-4 transition-colors duration-100 hover:bg-black hover:text-white disabled:text-muted-foreground"
                   >
                     Remove
                   </button>
                 </div>
               ) : (
-                <p className="text-sm leading-7 text-slate-500">No audio selected yet.</p>
+                <p className="text-base leading-7 text-muted-foreground">No audio selected yet.</p>
               )}
             </div>
 
@@ -462,45 +494,53 @@ export default function App() {
               type="button"
               onClick={handleTranscribe}
               disabled={!audioInput || isRecording || isFinalizingRecording || isTranscribing}
-              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:ring-offset-2 focus:ring-offset-slate-950 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
+              className="mt-5 inline-flex min-h-11 w-full items-center justify-center gap-3 border-2 border-black bg-black px-8 py-4 font-mono text-sm font-semibold uppercase tracking-widest text-white transition-colors duration-100 hover:bg-white hover:text-black disabled:cursor-not-allowed disabled:border-muted disabled:bg-muted disabled:text-muted-foreground"
             >
               {isTranscribing && (
                 <span
                   aria-hidden="true"
-                  className="h-4 w-4 animate-spin rounded-full border-2 border-slate-500 border-t-transparent"
+                  className="h-4 w-4 animate-spin border-2 border-white border-t-transparent"
                 />
               )}
-              {isTranscribing ? "Transcribing…" : "Transcribe upload"}
+              {isTranscribing ? "Transcribing…" : "Transcribe upload →"}
             </button>
           </section>
 
-          <section className="flex flex-col rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-black/20 sm:p-7">
+          <section className="flex flex-col border-t-4 border-black py-12 lg:border-l-4 lg:border-t-0 lg:pl-12">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-cyan-400">
+              <p className="font-mono text-xs font-semibold uppercase tracking-widest">
                 Step 2
               </p>
-              <h2 className="mt-2 text-xl font-semibold">Review the transcript</h2>
-              <p className="mt-2 text-sm leading-6 text-slate-400">
+              <h2 className="mt-3 font-display text-4xl font-semibold leading-none tracking-tight sm:text-5xl">
+                Review the transcript
+              </h2>
+              <p className="mt-4 text-lg leading-relaxed text-muted-foreground">
                 Audio transcription will appear here. You can also paste text directly and edit
                 anything before continuing.
               </p>
             </div>
 
             <div className="mt-6 flex items-center justify-between gap-3">
-              <label htmlFor="transcript" className="text-sm font-medium text-slate-300">
+              <label
+                htmlFor="transcript"
+                className="font-mono text-xs font-semibold uppercase tracking-widest"
+              >
                 Transcript
               </label>
               {isRecording && (
                 <span
                   role="status"
-                  className="inline-flex items-center gap-1.5 text-xs font-medium text-cyan-400/80"
+                  className="inline-flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-widest"
                 >
-                  <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-cyan-400" />
+                  <span className="h-1.5 w-1.5 animate-pulse bg-black" />
                   live…
                 </span>
               )}
               {isFinalizingRecording && (
-                <span role="status" className="text-xs font-medium text-slate-400">
+                <span
+                  role="status"
+                  className="font-mono text-[10px] font-semibold uppercase tracking-widest text-muted-foreground"
+                >
                   finalizing…
                 </span>
               )}
@@ -510,19 +550,19 @@ export default function App() {
               value={transcript}
               onChange={handleTranscriptChange}
               placeholder="Paste your transcript here, or transcribe a recording or uploaded file…"
-              className="mt-2 min-h-80 flex-1 resize-y rounded-2xl border border-slate-700 bg-slate-950/70 p-4 text-base leading-7 text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20"
+              className="mt-3 min-h-80 flex-1 resize-y border-2 border-black bg-white p-5 text-lg leading-relaxed text-black outline-none transition-[border-width] duration-100 placeholder:italic placeholder:text-muted-foreground focus:border-4"
             />
 
             {requestError && (
               <p
                 role="alert"
-                className="mt-3 rounded-xl bg-rose-500/10 px-4 py-3 text-sm text-rose-300 ring-1 ring-inset ring-rose-500/20"
+                className="mt-4 border-l-4 border-black bg-muted px-5 py-4 text-base"
               >
                 {requestError}
               </p>
             )}
 
-            <div className="mt-3 flex items-center justify-between gap-4 text-xs text-slate-500">
+            <div className="mt-4 flex items-center justify-between gap-4 font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
               <span>Editable before submission</span>
               <span>{transcript.trim() ? transcript.trim().split(/\s+/).length : 0} words</span>
             </div>
@@ -531,15 +571,15 @@ export default function App() {
               type="button"
               onClick={handleCreateDebrief}
               disabled={!canCreateDebrief || isThinking}
-              className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-400 px-5 py-3.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:ring-offset-2 focus:ring-offset-slate-950 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
+              className="mt-8 inline-flex min-h-11 w-full items-center justify-center gap-3 border-2 border-black bg-black px-8 py-4 font-mono text-sm font-semibold uppercase tracking-widest text-white transition-colors duration-100 hover:bg-white hover:text-black disabled:cursor-not-allowed disabled:border-muted disabled:bg-muted disabled:text-muted-foreground"
             >
               {isThinking && (
                 <span
                   aria-hidden="true"
-                  className="h-4 w-4 animate-spin rounded-full border-2 border-slate-500 border-t-transparent"
+                  className="h-4 w-4 animate-spin border-2 border-white border-t-transparent"
                 />
               )}
-              {isThinking ? "Thinking…" : "Create debrief"}
+              {isThinking ? "Thinking…" : "Create recap →"}
             </button>
 
           </section>
