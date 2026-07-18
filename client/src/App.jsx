@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+import Results from "./Results.jsx";
 
 const acceptedAudioFormats = ".mp3,.wav,.m4a,.mp4,.ogg,.opus,.webm";
 
@@ -37,13 +38,16 @@ export default function App() {
   const [isThinking, setIsThinking] = useState(false);
   const [recordingError, setRecordingError] = useState("");
   const [requestError, setRequestError] = useState("");
+  const [copyStatus, setCopyStatus] = useState("idle");
   const mediaRecorderRef = useRef(null);
   const mediaStreamRef = useRef(null);
   const audioChunksRef = useRef([]);
+  const copyResetTimeoutRef = useRef(null);
 
   useEffect(() => {
     return () => {
       mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+      clearTimeout(copyResetTimeoutRef.current);
     };
   }, []);
 
@@ -160,6 +164,7 @@ export default function App() {
 
       setTranscript(result.transcript);
       setDebriefResult(null);
+      setCopyStatus("idle");
     } catch (error) {
       setRequestError(error instanceof Error ? error.message : "Transcription failed.");
     } finally {
@@ -170,6 +175,7 @@ export default function App() {
   const handleTranscriptChange = (event) => {
     setTranscript(event.target.value);
     setDebriefResult(null);
+    setCopyStatus("idle");
     setRequestError("");
   };
 
@@ -193,6 +199,7 @@ export default function App() {
       const result = await readApiResponse(response, "Debrief generation failed.");
 
       setDebriefResult(result);
+      setCopyStatus("idle");
     } catch (error) {
       setRequestError(error instanceof Error ? error.message : "Debrief generation failed.");
     } finally {
@@ -201,6 +208,19 @@ export default function App() {
   };
 
   const canCreateDebrief = transcript.trim().length > 0;
+
+  const handleCopyDraft = async (draft) => {
+    clearTimeout(copyResetTimeoutRef.current);
+
+    try {
+      await navigator.clipboard.writeText(draft);
+      setCopyStatus("copied");
+    } catch {
+      setCopyStatus("error");
+    }
+
+    copyResetTimeoutRef.current = setTimeout(() => setCopyStatus("idle"), 1_800);
+  };
 
   return (
     <main className="min-h-screen bg-slate-950 px-5 py-10 text-slate-100 sm:px-8 sm:py-14">
@@ -387,13 +407,16 @@ export default function App() {
               {isThinking ? "Thinking…" : "Create debrief"}
             </button>
 
-            {debriefResult && (
-              <pre className="mt-6 overflow-x-auto whitespace-pre-wrap rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs leading-6 text-slate-300">
-                {JSON.stringify(debriefResult, null, 2)}
-              </pre>
-            )}
           </section>
         </div>
+
+        {debriefResult && (
+          <Results
+            result={debriefResult}
+            copyStatus={copyStatus}
+            onCopy={handleCopyDraft}
+          />
+        )}
       </div>
     </main>
   );
