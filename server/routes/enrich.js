@@ -1,4 +1,5 @@
-// Action items in a POST /api/enrich response carry `linear: { issue_id, identifier, title, url, state, action: "linked" | "created" | "updated" | null, confidence }`.
+// TEMP(all-actions): revert for 3-column mode
+// Every item in a POST /api/enrich response carries `linear: { issue_id, identifier, title, url, state, action: "linked" | "created" | "updated" | null, confidence }`.
 
 import { Router } from "express";
 import OpenAI from "openai";
@@ -80,10 +81,7 @@ function buildEnrichedResult(items, modelResult, observedIssues) {
       throw new Error("The enrichment service changed or reordered the debrief items.");
     }
 
-    if (item?.category !== "action_item") {
-      return item;
-    }
-
+    // TEMP(all-actions): revert for 3-column mode
     const candidate = modelItem.linear;
     const confidence = Math.max(0, Math.min(1, Number(candidate?.confidence) || 0));
 
@@ -134,9 +132,8 @@ function buildEnrichedResult(items, modelResult, observedIssues) {
 
 async function runEnrichment({ items, recapLine, detectedLanguage, linearToken }) {
   const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-  const actionItemIndexes = new Set(
-    items.flatMap((item, index) => (item?.category === "action_item" ? [index] : [])),
-  );
+  // TEMP(all-actions): revert for 3-column mode
+  const toolEligibleItemIndexes = new Set(items.map((_item, index) => index));
   const observedIssues = new Map();
   const searchedItemIndexes = new Set();
   let defaultTeamIdPromise;
@@ -146,15 +143,16 @@ async function runEnrichment({ items, recapLine, detectedLanguage, linearToken }
     return defaultTeamIdPromise;
   };
 
-  const assertActionItem = (itemIndex) => {
-    if (!Number.isInteger(itemIndex) || !actionItemIndexes.has(itemIndex)) {
-      throw new Error("Linear tools may only be used for action_item entries.");
+  // TEMP(all-actions): revert for 3-column mode
+  const assertToolEligibleItem = (itemIndex) => {
+    if (!Number.isInteger(itemIndex) || !toolEligibleItemIndexes.has(itemIndex)) {
+      throw new Error("Linear tools require a valid item index.");
     }
   };
 
   const executeToolCall = async (toolCall) => {
     const args = JSON.parse(toolCall.arguments);
-    assertActionItem(args.item_index);
+    assertToolEligibleItem(args.item_index);
 
     switch (toolCall.name) {
       case "search_issues": {
@@ -170,7 +168,8 @@ async function runEnrichment({ items, recapLine, detectedLanguage, linearToken }
       }
       case "create_issue": {
         if (!searchedItemIndexes.has(args.item_index)) {
-          throw new Error("create_issue requires search_issues for the action item first.");
+          // TEMP(all-actions): revert for 3-column mode
+          throw new Error("create_issue requires search_issues for the item first.");
         }
 
         const teamId = await getRequestDefaultTeamId();
@@ -301,10 +300,7 @@ router.post("/enrich", async (req, res) => {
     return res.status(500).json({ error: "OPENAI_API_KEY is not configured." });
   }
 
-  if (!items.some((item) => item?.category === "action_item")) {
-    return res.json({ items });
-  }
-
+  // TEMP(all-actions): revert for 3-column mode
   try {
     const result = await runEnrichment({
       items,

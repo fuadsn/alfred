@@ -27,6 +27,13 @@ const LINEAR_ACTION_STYLES = {
   updated: "border-black bg-white text-black hover:bg-black hover:text-white",
 };
 
+// TEMP(all-actions): revert for 3-column mode
+const CATEGORY_FLAGS = {
+  decision: "Decision",
+  open_question: "Open question",
+  action_item: "Action item",
+};
+
 export function groupItems(items) {
   const safeItems = Array.isArray(items) ? items : [];
 
@@ -47,37 +54,41 @@ export function assembleDraft(items, recapLine) {
     lines.push("", cleanRecapLine);
   }
 
-  for (const { key, title } of RESULT_CATEGORIES) {
-    const bullets = safeItems
-      .filter((item) => item?.category === key && typeof item.text === "string")
-      .map((item) => {
-        const text = item.text.trim();
-        const linear = item.linear;
-        const hasLinearLink =
-          key === "action_item" &&
-          linear?.action &&
-          typeof linear.identifier === "string" &&
-          typeof linear.url === "string";
-        const subIssue = linear?.sub_issue;
-        const hasSubIssueLink =
-          hasLinearLink &&
-          typeof subIssue?.identifier === "string" &&
-          typeof subIssue?.url === "string";
-        const parentSuffix = hasLinearLink
-          ? ` (${linear.identifier}: ${linear.url})`
-          : "";
-        const subIssueSuffix = hasSubIssueLink
-          ? ` (sub: ${subIssue.identifier}: ${subIssue.url})`
-          : "";
+  // TEMP(all-actions): revert for 3-column mode
+  const bullets = safeItems
+    .filter((item) => typeof item?.text === "string")
+    .map((item) => {
+      const text = item.text.trim();
+      const categoryPrefix =
+        item.category === "decision"
+          ? "[Decision] "
+          : item.category === "open_question"
+            ? "[Open question] "
+            : "";
+      const linear = item.linear;
+      const hasLinearLink =
+        linear?.action &&
+        typeof linear.identifier === "string" &&
+        typeof linear.url === "string";
+      const subIssue = linear?.sub_issue;
+      const hasSubIssueLink =
+        hasLinearLink &&
+        typeof subIssue?.identifier === "string" &&
+        typeof subIssue?.url === "string";
+      const parentSuffix = hasLinearLink
+        ? ` (${linear.identifier}: ${linear.url})`
+        : "";
+      const subIssueSuffix = hasSubIssueLink
+        ? ` (sub: ${subIssue.identifier}: ${subIssue.url})`
+        : "";
 
-        return `${text}${parentSuffix}${subIssueSuffix}`;
-      })
-      .filter(Boolean)
-      .map((text) => `- ${text}`);
+      return text ? `${categoryPrefix}${text}${parentSuffix}${subIssueSuffix}` : "";
+    })
+    .filter(Boolean)
+    .map((text) => `- ${text}`);
 
-    if (bullets.length > 0) {
-      lines.push("", `*${title}*`, ...bullets);
-    }
+  if (bullets.length > 0) {
+    lines.push("", "*Action Items*", ...bullets);
   }
 
   return lines.join("\n");
@@ -229,8 +240,9 @@ export default function Results({
   onLinearIssueCreated,
 }) {
   const items = Array.isArray(result.items) ? result.items : [];
-  const groupedItems = groupItems(items);
   const draft = assembleDraft(items, result.recap_line);
+  // TEMP(all-actions): revert for 3-column mode
+  const allActionItems = items;
 
   return (
     <section className="mt-20 border-t-4 border-black pb-20">
@@ -286,85 +298,75 @@ export default function Results({
         </div>
       )}
 
-      <div className="mt-12 grid gap-6 lg:grid-cols-3">
-        {RESULT_CATEGORIES.map((category) => {
-          const categoryItems = groupedItems[category.key];
+      <div className="mt-12">
+        <section className="border-2 border-black bg-white p-5 sm:p-6">
+          <div className="flex items-center justify-between gap-3">
+            <h3 className="flex items-center gap-3 font-display text-2xl font-semibold leading-none">
+              <span className="h-3 w-3 bg-black" />
+              Action Items
+            </h3>
+            <span className="border border-black bg-white px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-widest text-black">
+              {allActionItems.length}
+            </span>
+          </div>
 
-          return (
-            <section
-              key={category.key}
-              className="border-2 border-black bg-white p-5 sm:p-6"
-            >
-              <div className="flex items-center justify-between gap-3">
-                <h3 className="flex items-center gap-3 font-display text-2xl font-semibold leading-none">
-                  <span className={`h-3 w-3 ${category.dotClass}`} />
-                  {category.title}
-                </h3>
-                <span
-                  className={`border px-2.5 py-1 font-mono text-[10px] font-semibold uppercase tracking-widest ${category.countClass}`}
-                >
-                  {categoryItems.length}
-                </span>
+          <div className="mt-4 space-y-3">
+            {allActionItems.length > 0 ? (
+              allActionItems.map((item, itemIndex) => {
+                const linearAction = item.linear?.action;
+                const categoryFlag = CATEGORY_FLAGS[item.category] ?? item.category;
+
+                return (
+                  <article
+                    key={`${item.category}-${itemIndex}-${item.text}`}
+                    className="group border border-black bg-white p-5 transition-colors duration-100 hover:bg-black hover:text-white"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <h4 className="text-lg font-semibold leading-snug">
+                        {item.text}
+                      </h4>
+                      <span className="shrink-0 border border-black bg-white px-2 py-1 font-mono text-[10px] font-semibold uppercase tracking-widest text-black">
+                        {categoryFlag}
+                      </span>
+                    </div>
+                    {linearAction && <LinearIssueBadge linear={item.linear} />}
+                    {item.linear?.sub_issue && (
+                      <LinearIssueBadge linear={item.linear.sub_issue} isSubIssue />
+                    )}
+                    {!linearAction && (
+                      <CreateLinearIssueButton
+                        item={item}
+                        itemIndex={itemIndex}
+                        onCreated={onLinearIssueCreated}
+                      />
+                    )}
+                    {linearAction && !item.linear.sub_issue && (
+                      <CreateLinearIssueButton
+                        item={item}
+                        itemIndex={itemIndex}
+                        onCreated={onLinearIssueCreated}
+                        parentId={item.linear.issue_id}
+                      />
+                    )}
+                    <p className="mt-4 text-base leading-relaxed text-muted-foreground group-hover:text-white">
+                      <span className="font-mono text-[10px] font-semibold uppercase tracking-widest text-black group-hover:text-white">
+                        why:
+                      </span>{" "}
+                      {item.reasoning}
+                    </p>
+                    <blockquote className="mt-4 border-l-2 border-black pl-4 text-base italic leading-relaxed text-muted-foreground group-hover:border-white group-hover:text-white">
+                      “{item.source_quote}”
+                    </blockquote>
+                  </article>
+                );
+              })
+            ) : (
+              <div className="border border-dashed border-black bg-muted px-4 py-10 text-center font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
+                None identified
               </div>
-
-              <div className="mt-4 space-y-3">
-                {categoryItems.length > 0 ? (
-                  categoryItems.map((item, index) => {
-                    const itemIndex = items.indexOf(item);
-                    const linearAction = item.linear?.action;
-
-                    return (
-                      <article
-                        key={`${category.key}-${index}-${item.text}`}
-                        className="group border border-black bg-white p-5 transition-colors duration-100 hover:bg-black hover:text-white"
-                      >
-                        <h4 className="text-lg font-semibold leading-snug">
-                          {item.text}
-                        </h4>
-                        {category.key === "action_item" && linearAction && (
-                          <LinearIssueBadge linear={item.linear} />
-                        )}
-                        {category.key === "action_item" && item.linear?.sub_issue && (
-                          <LinearIssueBadge linear={item.linear.sub_issue} isSubIssue />
-                        )}
-                        {category.key === "action_item" && !linearAction && (
-                          <CreateLinearIssueButton
-                            item={item}
-                            itemIndex={itemIndex}
-                            onCreated={onLinearIssueCreated}
-                          />
-                        )}
-                        {category.key === "action_item" &&
-                          linearAction &&
-                          !item.linear.sub_issue && (
-                            <CreateLinearIssueButton
-                              item={item}
-                              itemIndex={itemIndex}
-                              onCreated={onLinearIssueCreated}
-                              parentId={item.linear.issue_id}
-                            />
-                          )}
-                        <p className="mt-4 text-base leading-relaxed text-muted-foreground group-hover:text-white">
-                          <span className="font-mono text-[10px] font-semibold uppercase tracking-widest text-black group-hover:text-white">
-                            why:
-                          </span>{" "}
-                          {item.reasoning}
-                        </p>
-                        <blockquote className="mt-4 border-l-2 border-black pl-4 text-base italic leading-relaxed text-muted-foreground group-hover:border-white group-hover:text-white">
-                          “{item.source_quote}”
-                        </blockquote>
-                      </article>
-                    );
-                  })
-                ) : (
-                  <div className="border border-dashed border-black bg-muted px-4 py-10 text-center font-mono text-[10px] uppercase tracking-widest text-muted-foreground">
-                    None identified
-                  </div>
-                )}
-              </div>
-            </section>
-          );
-        })}
+            )}
+          </div>
+        </section>
       </div>
 
       {typeof result.enrichment_notes === "string" && result.enrichment_notes.trim() && (

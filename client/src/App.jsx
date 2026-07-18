@@ -395,11 +395,12 @@ export default function App() {
     copyResetTimeoutRef.current = setTimeout(() => setCopyStatus("idle"), 1_800);
   };
 
+  // TEMP(all-actions): revert for 3-column mode
   const handleLinearIssueCreated = (itemIndex, issue, isSubIssue = false) => {
     setDebriefResult((currentResult) => {
       const currentItem = currentResult?.items?.[itemIndex];
 
-      if (!currentItem || currentItem.category !== "action_item") {
+      if (!currentItem) {
         return currentResult;
       }
 
