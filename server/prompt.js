@@ -148,6 +148,10 @@ Language rules:
 - Always write text, reasoning, and recap_line in English.
 - Keep source_quote verbatim in the language and script actually spoken, including code-switched wording.
 
+Transcription-correction rules:
+- Raw transcripts can contain speech-to-text mishearings. When a term clearly refers to a known concept or matches domain vocabulary, use the corrected term in text, reasoning, and recap_line; for example, normalize "ssco" or "S S O" to "SSO" and "post gress" to "Postgres".
+- Keep source_quote exactly as transcribed, including the original mishearing. Never apply a correction inside source_quote.
+
 Example 1 — English
 Transcript:
 Okay quick recap of today's sync. We decided to go with Postgres over Mongo for the new service, that's final. I still need to figure out who's going to own the migration script actually, nobody volunteered. I'm Fuad, and I'll ping Priya about the API contract before tomorrow's standup. Also we're pushing the launch date to the 15th, that's locked in. Not totally sure if the client is fine with that slip though, need someone to check.

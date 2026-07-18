@@ -113,6 +113,25 @@ export async function searchIssues(query, token) {
   return data.searchIssues.nodes.map(toIssue);
 }
 
+export async function listRecentIssues(token) {
+  const data = await linearRequest(
+    `
+      query RecentIssues {
+        issues(first: 40, orderBy: updatedAt) {
+          nodes {
+            title
+            identifier
+          }
+        }
+      }
+    `,
+    {},
+    token,
+  );
+
+  return data.issues?.nodes ?? [];
+}
+
 export async function getIssue(id, token) {
   const data = await linearRequest(
     `

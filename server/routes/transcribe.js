@@ -8,9 +8,15 @@ import OpenAI, {
   toFile,
 } from "openai";
 import { extractAndChunkMonoAudio, remuxOpusToOgg } from "../ffmpeg.js";
+import { listRecentIssues } from "../linear.js";
 
 const router = Router();
 const LONG_MEDIA_THRESHOLD_BYTES = 24 * 1024 * 1024;
+const VOCABULARY_CACHE_MS = 5 * 60 * 1_000;
+const VOCABULARY_HINT_MAX_LENGTH = 600;
+const vocabularyHintCache = { value: "", expires: 0 };
+let vocabularyHintFailureLogged = false;
+let vocabularyHintAttachmentLogged = false;
 const allowedExtensions = new Set([
   ".webm",
   ".mp4",
@@ -38,6 +44,92 @@ const upload = multer({
     return callback(null, true);
   },
 });
+
+function buildVocabularyHint(issues) {
+  const prefix = "Domain terms: ";
+  const terms = [];
+  const seen = new Set();
+  let length = prefix.length;
+
+  for (const issue of issues) {
+    const titleWords =
+      typeof issue?.title === "string"
+        ? issue.title.match(/[\p{L}\p{N}][\p{L}\p{N}+#.\/-]*/gu) ?? []
+        : [];
+    const candidates = [issue?.identifier, ...titleWords];
+
+    for (const candidate of candidates) {
+      if (typeof candidate !== "string") {
+        continue;
+      }
+
+      const term = candidate.trim();
+      const normalizedTerm = term.toLocaleLowerCase();
+
+      if (!term || seen.has(normalizedTerm)) {
+        continue;
+      }
+
+      const addedLength = term.length + (terms.length > 0 ? 2 : 0);
+
+      if (length + addedLength > VOCABULARY_HINT_MAX_LENGTH) {
+        return terms.length > 0 ? `${prefix}${terms.join(", ")}` : "";
+      }
+
+      seen.add(normalizedTerm);
+      terms.push(term);
+      length += addedLength;
+    }
+  }
+
+  return terms.length > 0 ? `${prefix}${terms.join(", ")}` : "";
+}
+
+async function getVocabularyHint() {
+  const now = Date.now();
+
+  if (now < vocabularyHintCache.expires) {
+    return vocabularyHintCache.value;
+  }
+
+  const linearToken = process.env.LINEAR_API_KEY?.trim();
+
+  if (!linearToken) {
+    vocabularyHintCache.value = "";
+    vocabularyHintCache.expires = now + VOCABULARY_CACHE_MS;
+    return "";
+  }
+
+  try {
+    const issues = await listRecentIssues(linearToken);
+    const vocabularyHint = buildVocabularyHint(issues);
+
+    vocabularyHintCache.value = vocabularyHint;
+    vocabularyHintCache.expires = now + VOCABULARY_CACHE_MS;
+
+    if (vocabularyHint) {
+      console.log(
+        `[transcribe] Vocabulary hint fetched from ${issues.length} recent Linear issues (${vocabularyHint.length} chars).`,
+      );
+    }
+
+    return vocabularyHint;
+  } catch (error) {
+    vocabularyHintCache.value = "";
+    vocabularyHintCache.expires = now + VOCABULARY_CACHE_MS;
+
+    if (!vocabularyHintFailureLogged) {
+      console.warn(
+        `[transcribe] Linear vocabulary unavailable; continuing without a hint: ${
+          error instanceof Error ? error.message : "Unknown error."
+        }`,
+      );
+      vocabularyHintFailureLogged = true;
+    }
+
+    return "";
+  }
+}
 
 router.post("/transcribe", upload.single("audio"), async (req, res) => {
   if (!req.file) {
@@ -87,6 +179,12 @@ router.post("/transcribe", upload.single("audio"), async (req, res) => {
 
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const transcriptParts = [];
+    const vocabularyHint = await getVocabularyHint();
+
+    if (vocabularyHint && !vocabularyHintAttachmentLogged) {
+      console.log("[transcribe] Vocabulary hint attached to transcription requests.");
+      vocabularyHintAttachmentLogged = true;
+    }
 
     for (const input of transcriptionInputs) {
       const audioFile = await toFile(input.buffer, input.filename, {
@@ -96,6 +194,7 @@ router.post("/transcribe", upload.single("audio"), async (req, res) => {
         {
           file: audioFile,
           model: transcriptionModel,
+          ...(vocabularyHint ? { prompt: vocabularyHint } : {}),
         },
         {
           timeout: transcriptionTimeoutMs,
