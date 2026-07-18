@@ -7,12 +7,12 @@
     "predev": "npm run build:styles",
     "dev": "npm run dev:styles & npm run dev:server & npm run dev:client",
     "dev:client": "vite --config client/vite.config.js",
-    "dev:server": "node --watch server/index.js",
+    "dev:server": "node --env-file-if-exists=.env --watch server/index.js",
     "dev:styles": "tailwindcss -c client/tailwind.config.js -i client/src/styles.input.css -o client/src/styles.css --watch",
     "build": "npm run build:styles && npm run build:client",
     "build:client": "vite build --config client/vite.config.js",
     "build:styles": "tailwindcss -c client/tailwind.config.js -i client/src/styles.input.css -o client/src/styles.css --minify",
-    "start": "node server/index.js"
+    "start": "node --env-file-if-exists=.env server/index.js"
   },
   "dependencies": {
     "express": "^5.1.0",
