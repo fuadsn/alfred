@@ -67,10 +67,14 @@ export default function App() {
   const mediaStreamRef = useRef(null);
   const audioChunksRef = useRef([]);
   const copyResetTimeoutRef = useRef(null);
+  const recognitionRef = useRef(null);
+  const liveFinalTranscriptRef = useRef("");
 
   useEffect(() => {
     return () => {
       mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
+      recognitionRef.current?.stop();
+      recognitionRef.current = null;
       clearTimeout(copyResetTimeoutRef.current);
     };
   }, []);
@@ -78,6 +82,66 @@ export default function App() {
   const stopMediaStream = () => {
     mediaStreamRef.current?.getTracks().forEach((track) => track.stop());
     mediaStreamRef.current = null;
+  };
+
+  const stopLiveTranscription = () => {
+    const recognition = recognitionRef.current;
+
+    recognitionRef.current = null;
+    recognition?.stop();
+  };
+
+  const startLiveTranscription = () => {
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+    if (!SpeechRecognition) {
+      return;
+    }
+
+    const recognition = new SpeechRecognition();
+
+    recognition.lang = "en-US";
+    recognition.continuous = true;
+    recognition.interimResults = true;
+
+    recognition.addEventListener("result", (event) => {
+      let interimTranscript = "";
+
+      for (let index = event.resultIndex; index < event.results.length; index += 1) {
+        const result = event.results[index];
+
+        if (result.isFinal) {
+          liveFinalTranscriptRef.current += `${result[0].transcript} `;
+        } else {
+          interimTranscript += result[0].transcript;
+        }
+      }
+
+      setTranscript((liveFinalTranscriptRef.current + interimTranscript).trim());
+    });
+
+    recognition.addEventListener("end", () => {
+      // The browser ends recognition after silence; restart while still recording.
+      if (
+        recognitionRef.current === recognition &&
+        mediaRecorderRef.current?.state === "recording"
+      ) {
+        try {
+          recognition.start();
+        } catch {
+          // A restart can race the browser's own state; the live preview just stops.
+        }
+      }
+    });
+
+    liveFinalTranscriptRef.current = "";
+    recognitionRef.current = recognition;
+
+    try {
+      recognition.start();
+    } catch {
+      recognitionRef.current = null;
+    }
   };
 
   const startRecording = async () => {
@@ -119,6 +183,7 @@ export default function App() {
           });
           setIsRecording(false);
           mediaRecorderRef.current = null;
+          stopLiveTranscription();
           stopMediaStream();
         },
         { once: true },
@@ -129,12 +194,14 @@ export default function App() {
         () => {
           setRecordingError("Recording failed. Please try again or upload an audio file.");
           setIsRecording(false);
+          stopLiveTranscription();
           stopMediaStream();
         },
         { once: true },
       );
 
       recorder.start();
+      startLiveTranscription();
       setIsRecording(true);
     } catch (error) {
       stopMediaStream();
@@ -147,9 +214,18 @@ export default function App() {
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current?.state === "recording") {
-      mediaRecorderRef.current.stop();
+    const recorder = mediaRecorderRef.current;
+
+    if (recorder?.state !== "recording") {
+      return;
     }
+
+    // ponytail: fixed 600ms tail so the last words aren't clipped; tune if still clipping
+    setTimeout(() => {
+      if (recorder.state === "recording") {
+        recorder.stop();
+      }
+    }, 600);
   };
 
   useEffect(() => {
