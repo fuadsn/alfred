@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import path from "node:path";
 import { Router } from "express";
 import multer from "multer";
@@ -8,8 +7,10 @@ import OpenAI, {
   APIError,
   toFile,
 } from "openai";
+import { extractAndChunkMonoAudio, remuxOpusToOgg } from "../ffmpeg.js";
 
 const router = Router();
+const LONG_MEDIA_THRESHOLD_BYTES = 24 * 1024 * 1024;
 const allowedExtensions = new Set([
   ".webm",
   ".mp4",
@@ -20,54 +21,9 @@ const allowedExtensions = new Set([
   ".opus",
 ]);
 
-export function remuxOpusToOgg(buffer) {
-  return new Promise((resolve) => {
-    const ffmpeg = spawn("ffmpeg", ["-i", "pipe:0", "-c:a", "copy", "-f", "ogg", "pipe:1"]);
-    const outputChunks = [];
-    const errorChunks = [];
-    let settled = false;
-
-    const fail = (message) => {
-      if (settled) {
-        return;
-      }
-
-      settled = true;
-      console.error(message);
-      resolve(null);
-    };
-
-    ffmpeg.stdout.on("data", (chunk) => outputChunks.push(chunk));
-    ffmpeg.stderr.on("data", (chunk) => errorChunks.push(chunk));
-    ffmpeg.stdin.on("error", () => {});
-
-    ffmpeg.once("error", (error) => {
-      const stderr = Buffer.concat(errorChunks).toString().trim();
-      fail(`ffmpeg opus remux failed: ${error.message}${stderr ? `\n${stderr}` : ""}`);
-    });
-
-    ffmpeg.once("close", (code) => {
-      if (settled) {
-        return;
-      }
-
-      if (code !== 0) {
-        const stderr = Buffer.concat(errorChunks).toString().trim();
-        fail(`ffmpeg opus remux exited with code ${code}${stderr ? `:\n${stderr}` : ""}`);
-        return;
-      }
-
-      settled = true;
-      resolve(Buffer.concat(outputChunks));
-    });
-
-    ffmpeg.stdin.end(buffer);
-  });
-}
-
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 25 * 1024 * 1024 },
+  limits: { fileSize: 500 * 1024 * 1024 },
   fileFilter: (_req, file, callback) => {
     const extension = path.extname(file.originalname).toLowerCase();
 
@@ -92,41 +48,71 @@ router.post("/transcribe", upload.single("audio"), async (req, res) => {
     return res.status(500).json({ error: "OPENAI_API_KEY is not configured." });
   }
 
+  const mimeType = req.file.mimetype.split(";", 1)[0].trim().toLowerCase();
+  const isChunked = mimeType === "video/mp4" || req.file.size > LONG_MEDIA_THRESHOLD_BYTES;
+  const transcriptionTimeoutMs = isChunked ? 180_000 : 10_000;
+
   try {
     const originalExtension = path.extname(req.file.originalname);
-    let audioBuffer = req.file.buffer;
-    let audioFilename = req.file.originalname;
-    let audioType = req.file.mimetype;
+    let transcriptionInputs;
 
-    if (originalExtension.toLowerCase() === ".opus") {
+    if (isChunked) {
+      transcriptionInputs = await extractAndChunkMonoAudio(
+        req.file.buffer,
+        req.file.originalname,
+      );
+    } else if (originalExtension.toLowerCase() === ".opus") {
       const remuxedBuffer = await remuxOpusToOgg(req.file.buffer);
 
       if (remuxedBuffer) {
-        audioBuffer = remuxedBuffer;
-        audioFilename = `${path.basename(req.file.originalname, originalExtension)}.ogg`;
-        audioType = "audio/ogg";
+        transcriptionInputs = [
+          {
+            buffer: remuxedBuffer,
+            filename: `${path.basename(req.file.originalname, originalExtension)}.ogg`,
+            type: "audio/ogg",
+          },
+        ];
       }
     }
 
-    const audioFile = await toFile(audioBuffer, audioFilename, {
-      type: audioType,
-    });
-    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
-    const transcription = await openai.audio.transcriptions.create(
+    transcriptionInputs ??= [
       {
-        file: audioFile,
-        model: "gpt-4o-transcribe",
+        buffer: req.file.buffer,
+        filename: req.file.originalname,
+        type: req.file.mimetype,
       },
-      {
-        timeout: 10_000,
-        maxRetries: 0,
-      },
-    );
+    ];
 
-    return res.json({ transcript: transcription.text });
+    const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
+    const transcriptParts = [];
+
+    for (const input of transcriptionInputs) {
+      const audioFile = await toFile(input.buffer, input.filename, {
+        type: input.type,
+      });
+      const transcription = await openai.audio.transcriptions.create(
+        {
+          file: audioFile,
+          model: "gpt-4o-transcribe",
+        },
+        {
+          timeout: transcriptionTimeoutMs,
+          maxRetries: 0,
+        },
+      );
+      const transcriptPart = transcription.text.trim();
+
+      if (transcriptPart) {
+        transcriptParts.push(transcriptPart);
+      }
+    }
+
+    return res.json({ transcript: transcriptParts.join("\n\n") });
   } catch (error) {
     if (error instanceof APIConnectionTimeoutError) {
-      return res.status(504).json({ error: "Transcription timed out after 10 seconds." });
+      return res.status(504).json({
+        error: `Transcription timed out after ${transcriptionTimeoutMs / 1_000} seconds.`,
+      });
     }
 
     if (error instanceof APIError && error.status) {
