@@ -22,9 +22,9 @@ export const RESULT_CATEGORIES = [
 ];
 
 const LINEAR_ACTION_STYLES = {
-  linked: "border-black bg-black text-white group-hover:border-white group-hover:bg-white group-hover:text-black",
-  created: "border-black bg-black text-white group-hover:border-white group-hover:bg-white group-hover:text-black",
-  updated: "border-black bg-black text-white group-hover:border-white group-hover:bg-white group-hover:text-black",
+  linked: "border-black bg-white text-black hover:bg-black hover:text-white",
+  created: "border-black bg-white text-black hover:bg-black hover:text-white",
+  updated: "border-black bg-white text-black hover:bg-black hover:text-white",
 };
 
 export function groupItems(items) {
@@ -105,7 +105,7 @@ export default function Results({
                 aria-hidden="true"
                 className="h-3 w-3 animate-spin border-2 border-white border-t-black"
               />
-              Linking to Linear…
+              Linking issues…
             </span>
           )}
           <span className="inline-flex min-h-11 w-fit items-center border-2 border-white px-3 py-2 font-mono text-[10px] font-semibold uppercase tracking-widest text-white">
@@ -117,13 +117,20 @@ export default function Results({
       {enrichmentWarning && (
         <div
           role="alert"
-          className="mt-8 flex items-start justify-between gap-4 border-2 border-black bg-muted px-5 py-4 text-base"
+          className="mt-8 flex flex-col gap-4 border-2 border-black bg-white px-5 py-4 text-base sm:flex-row sm:items-center sm:justify-between"
         >
-          <span>{enrichmentWarning}</span>
+          <div>
+            <p className="font-mono text-[10px] font-semibold uppercase tracking-widest">
+              Issue linking warning
+            </p>
+            <p className="mt-2 text-base leading-relaxed text-muted-foreground">
+              {enrichmentWarning}
+            </p>
+          </div>
           <button
             type="button"
             onClick={onDismissEnrichmentWarning}
-            className="min-h-11 shrink-0 px-3 font-mono text-[10px] font-semibold uppercase tracking-widest underline underline-offset-4 transition-colors duration-100 hover:bg-black hover:text-white"
+            className="inline-flex min-h-11 shrink-0 items-center justify-center border-2 border-black bg-white px-4 py-2 font-mono text-[10px] font-semibold uppercase tracking-widest transition-colors duration-100 hover:bg-black hover:text-white"
             aria-label="Dismiss Linear linking warning"
           >
             Dismiss
@@ -172,7 +179,7 @@ export default function Results({
                         {category.key === "action_item" && linearAction && linearStyle && (
                           <div className="mt-4 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-widest">
                             <span
-                              className={`inline-flex items-center gap-1.5 border px-2.5 py-1 font-semibold ${linearStyle}`}
+                              className={`inline-flex items-center gap-1.5 border px-2.5 py-1 font-semibold transition-colors duration-100 ${linearStyle}`}
                             >
                               <a
                                 href={item.linear.url}

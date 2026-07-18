@@ -98,19 +98,19 @@ function toIssue(issue) {
 export async function searchIssues(query, token) {
   const data = await linearRequest(
     `
-      query SearchIssues($query: String!) {
-        issueSearch(query: $query, first: 10) {
+      query S($term: String!) {
+        searchIssues(term: $term, first: 10) {
           nodes {
             ${ISSUE_FIELDS}
           }
         }
       }
     `,
-    { query },
+    { term: query },
     token,
   );
 
-  return data.issueSearch.nodes.map(toIssue);
+  return data.searchIssues.nodes.map(toIssue);
 }
 
 export async function getIssue(id, token) {

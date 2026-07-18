@@ -62,8 +62,10 @@ export default function App() {
   const [isFinalizingRecording, setIsFinalizingRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
+  const [isEnriching, setIsEnriching] = useState(false);
   const [recordingError, setRecordingError] = useState("");
   const [requestError, setRequestError] = useState("");
+  const [enrichmentWarning, setEnrichmentWarning] = useState("");
   const [copyStatus, setCopyStatus] = useState("idle");
   const mediaRecorderRef = useRef(null);
   const mediaStreamRef = useRef(null);
@@ -71,6 +73,7 @@ export default function App() {
   const recordingRequestInFlightRef = useRef(false);
   const recordingRequestPromiseRef = useRef(Promise.resolve());
   const recordingFailedRef = useRef(false);
+  const enrichmentRequestIdRef = useRef(0);
   const copyResetTimeoutRef = useRef(null);
 
   useEffect(() => {
@@ -86,8 +89,11 @@ export default function App() {
   };
 
   const replaceTranscript = (nextTranscript) => {
+    enrichmentRequestIdRef.current += 1;
     setTranscript(nextTranscript);
     setDebriefResult(null);
+    setIsEnriching(false);
+    setEnrichmentWarning("");
     setCopyStatus("idle");
     setRequestError("");
   };
@@ -139,6 +145,9 @@ export default function App() {
       setAudioInput(null);
       setTranscript("");
       setDebriefResult(null);
+      enrichmentRequestIdRef.current += 1;
+      setIsEnriching(false);
+      setEnrichmentWarning("");
       setCopyStatus("idle");
 
       recorder.addEventListener("dataavailable", (event) => {
@@ -283,8 +292,11 @@ export default function App() {
   };
 
   const handleTranscriptChange = (event) => {
+    enrichmentRequestIdRef.current += 1;
     setTranscript(event.target.value);
     setDebriefResult(null);
+    setIsEnriching(false);
+    setEnrichmentWarning("");
     setCopyStatus("idle");
     setRequestError("");
   };
@@ -296,8 +308,12 @@ export default function App() {
       return;
     }
 
+    const enrichmentRequestId = enrichmentRequestIdRef.current + 1;
+    enrichmentRequestIdRef.current = enrichmentRequestId;
     setRequestError("");
     setDebriefResult(null);
+    setIsEnriching(false);
+    setEnrichmentWarning("");
     setIsThinking(true);
 
     try {
@@ -310,6 +326,53 @@ export default function App() {
 
       setDebriefResult(result);
       setCopyStatus("idle");
+      setIsThinking(false);
+      setIsEnriching(true);
+
+      try {
+        const enrichResponse = await fetch("/api/enrich", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            items: result.items,
+            recap_line: result.recap_line,
+            detected_language: result.detected_language,
+          }),
+        });
+
+        if (enrichResponse.status === 400) {
+          return;
+        }
+
+        const enrichedResult = await readApiResponse(
+          enrichResponse,
+          "The issue-linking request failed.",
+        );
+
+        if (!Array.isArray(enrichedResult?.items)) {
+          throw new Error("The issue-linking service returned no items.");
+        }
+
+        setDebriefResult((currentResult) =>
+          currentResult === result
+            ? {
+                ...result,
+                ...enrichedResult,
+                items: enrichedResult.items,
+              }
+            : currentResult,
+        );
+      } catch (error) {
+        if (enrichmentRequestIdRef.current === enrichmentRequestId) {
+          setEnrichmentWarning(
+            error instanceof Error ? error.message : "The issue-linking request failed.",
+          );
+        }
+      } finally {
+        if (enrichmentRequestIdRef.current === enrichmentRequestId) {
+          setIsEnriching(false);
+        }
+      }
     } catch (error) {
       setRequestError(error instanceof Error ? error.message : "Recap generation failed.");
     } finally {
@@ -590,6 +653,9 @@ export default function App() {
             result={debriefResult}
             copyStatus={copyStatus}
             onCopy={handleCopyDraft}
+            isEnriching={isEnriching}
+            enrichmentWarning={enrichmentWarning}
+            onDismissEnrichmentWarning={() => setEnrichmentWarning("")}
           />
         )}
       </div>
