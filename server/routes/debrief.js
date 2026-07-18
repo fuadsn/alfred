@@ -41,7 +41,7 @@ router.post("/debrief", async (req, res) => {
         },
       },
       {
-        timeout: 15_000,
+        timeout: 60_000,
         maxRetries: 0,
       },
     );
@@ -53,7 +53,7 @@ router.post("/debrief", async (req, res) => {
     return res.json(JSON.parse(response.output_text));
   } catch (error) {
     if (error instanceof APIConnectionTimeoutError) {
-      return res.status(504).json({ error: "Debrief generation timed out after 15 seconds." });
+      return res.status(504).json({ error: "Debrief generation timed out after 60 seconds." });
     }
 
     if (error instanceof APIError && error.status) {

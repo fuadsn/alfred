@@ -50,7 +50,7 @@ router.post("/transcribe", upload.single("audio"), async (req, res) => {
 
   const mimeType = req.file.mimetype.split(";", 1)[0].trim().toLowerCase();
   const isChunked = mimeType === "video/mp4" || req.file.size > LONG_MEDIA_THRESHOLD_BYTES;
-  const transcriptionTimeoutMs = isChunked ? 180_000 : 10_000;
+  const transcriptionTimeoutMs = isChunked ? 180_000 : 45_000;
 
   try {
     const originalExtension = path.extname(req.file.originalname);

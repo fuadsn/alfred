@@ -152,6 +152,40 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    const handleGlobalKeyDown = (event) => {
+      const isSpace = event.code === "Space" || event.key === " ";
+
+      if (!isSpace || event.repeat) {
+        return;
+      }
+
+      const activeElement = document.activeElement;
+      const activeTagName = activeElement?.tagName;
+      const isEditable =
+        ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(activeTagName) ||
+        activeElement?.isContentEditable;
+
+      if (isEditable) {
+        return;
+      }
+
+      event.preventDefault();
+
+      if (isRecording) {
+        stopRecording();
+      } else {
+        startRecording();
+      }
+    };
+
+    window.addEventListener("keydown", handleGlobalKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleGlobalKeyDown);
+    };
+  }, [isRecording]);
+
   const handleFileChange = (event) => {
     const file = event.target.files?.[0];
 
@@ -395,6 +429,7 @@ export default function App() {
                       Start recording
                     </button>
                   )}
+                  <p className="mt-2 text-center text-xs text-slate-500">or press Space</p>
                 </div>
               </div>
 
