@@ -14,11 +14,29 @@ function getRecordingMimeType() {
   return "";
 }
 
+async function readApiResponse(response, fallbackError) {
+  const result = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new Error(result?.error || fallbackError);
+  }
+
+  if (result === null) {
+    throw new Error(fallbackError);
+  }
+
+  return result;
+}
+
 export default function App() {
   const [transcript, setTranscript] = useState("");
   const [audioInput, setAudioInput] = useState(null);
+  const [debriefResult, setDebriefResult] = useState(null);
   const [isRecording, setIsRecording] = useState(false);
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isThinking, setIsThinking] = useState(false);
   const [recordingError, setRecordingError] = useState("");
+  const [requestError, setRequestError] = useState("");
   const mediaRecorderRef = useRef(null);
   const mediaStreamRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -36,6 +54,7 @@ export default function App() {
 
   const startRecording = async () => {
     setRecordingError("");
+    setRequestError("");
 
     if (typeof MediaRecorder === "undefined" || !navigator.mediaDevices?.getUserMedia) {
       setRecordingError("Audio recording is not supported in this browser.");
@@ -113,11 +132,72 @@ export default function App() {
     }
 
     setRecordingError("");
+    setRequestError("");
     setAudioInput({ audio: file, name: file.name, source: "upload" });
   };
 
-  const handleTranscribe = () => {
-    // TODO: POST audioInput.audio to /api/transcribe and write the result to setTranscript in unit 6.
+  const handleTranscribe = async () => {
+    if (!audioInput || isTranscribing) {
+      return;
+    }
+
+    setRequestError("");
+    setIsTranscribing(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("audio", audioInput.audio, audioInput.name);
+
+      const response = await fetch("/api/transcribe", {
+        method: "POST",
+        body: formData,
+      });
+      const result = await readApiResponse(response, "Transcription failed.");
+
+      if (typeof result?.transcript !== "string") {
+        throw new Error("The transcription service returned no transcript.");
+      }
+
+      setTranscript(result.transcript);
+      setDebriefResult(null);
+    } catch (error) {
+      setRequestError(error instanceof Error ? error.message : "Transcription failed.");
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  const handleTranscriptChange = (event) => {
+    setTranscript(event.target.value);
+    setDebriefResult(null);
+    setRequestError("");
+  };
+
+  const handleCreateDebrief = async () => {
+    const trimmedTranscript = transcript.trim();
+
+    if (!trimmedTranscript || isThinking) {
+      return;
+    }
+
+    setRequestError("");
+    setDebriefResult(null);
+    setIsThinking(true);
+
+    try {
+      const response = await fetch("/api/debrief", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ transcript: trimmedTranscript }),
+      });
+      const result = await readApiResponse(response, "Debrief generation failed.");
+
+      setDebriefResult(result);
+    } catch (error) {
+      setRequestError(error instanceof Error ? error.message : "Debrief generation failed.");
+    } finally {
+      setIsThinking(false);
+    }
   };
 
   const canCreateDebrief = transcript.trim().length > 0;
@@ -224,7 +304,11 @@ export default function App() {
                   </div>
                   <button
                     type="button"
-                    onClick={() => setAudioInput(null)}
+                    onClick={() => {
+                      setAudioInput(null);
+                      setRequestError("");
+                    }}
+                    disabled={isTranscribing}
                     className="shrink-0 text-xs font-semibold text-slate-400 transition hover:text-slate-200"
                   >
                     Remove
@@ -238,10 +322,16 @@ export default function App() {
             <button
               type="button"
               onClick={handleTranscribe}
-              disabled={!audioInput || isRecording}
-              className="mt-4 w-full rounded-xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:ring-offset-2 focus:ring-offset-slate-950 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
+              disabled={!audioInput || isRecording || isTranscribing}
+              className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-100 px-4 py-3 text-sm font-semibold text-slate-950 transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:ring-offset-2 focus:ring-offset-slate-950 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
             >
-              Transcribe
+              {isTranscribing && (
+                <span
+                  aria-hidden="true"
+                  className="h-4 w-4 animate-spin rounded-full border-2 border-slate-500 border-t-transparent"
+                />
+              )}
+              {isTranscribing ? "Transcribing…" : "Transcribe"}
             </button>
           </section>
 
@@ -263,10 +353,19 @@ export default function App() {
             <textarea
               id="transcript"
               value={transcript}
-              onChange={(event) => setTranscript(event.target.value)}
+              onChange={handleTranscriptChange}
               placeholder="Paste your transcript here, or transcribe a recording or uploaded file…"
               className="mt-2 min-h-80 flex-1 resize-y rounded-2xl border border-slate-700 bg-slate-950/70 p-4 text-base leading-7 text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20"
             />
+
+            {requestError && (
+              <p
+                role="alert"
+                className="mt-3 rounded-xl bg-rose-500/10 px-4 py-3 text-sm text-rose-300 ring-1 ring-inset ring-rose-500/20"
+              >
+                {requestError}
+              </p>
+            )}
 
             <div className="mt-3 flex items-center justify-between gap-4 text-xs text-slate-500">
               <span>Editable before submission</span>
@@ -275,11 +374,24 @@ export default function App() {
 
             <button
               type="button"
-              disabled={!canCreateDebrief}
-              className="mt-6 w-full rounded-xl bg-cyan-400 px-5 py-3.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:ring-offset-2 focus:ring-offset-slate-950 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
+              onClick={handleCreateDebrief}
+              disabled={!canCreateDebrief || isThinking}
+              className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-cyan-400 px-5 py-3.5 text-sm font-semibold text-slate-950 transition hover:bg-cyan-300 focus:outline-none focus:ring-2 focus:ring-cyan-300 focus:ring-offset-2 focus:ring-offset-slate-950 disabled:cursor-not-allowed disabled:bg-slate-800 disabled:text-slate-500"
             >
-              Create debrief
+              {isThinking && (
+                <span
+                  aria-hidden="true"
+                  className="h-4 w-4 animate-spin rounded-full border-2 border-slate-500 border-t-transparent"
+                />
+              )}
+              {isThinking ? "Thinking…" : "Create debrief"}
             </button>
+
+            {debriefResult && (
+              <pre className="mt-6 overflow-x-auto whitespace-pre-wrap rounded-2xl border border-slate-800 bg-slate-950/80 p-4 text-xs leading-6 text-slate-300">
+                {JSON.stringify(debriefResult, null, 2)}
+              </pre>
+            )}
           </section>
         </div>
       </div>
