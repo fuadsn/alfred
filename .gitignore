@@ -3,3 +3,4 @@ dist/
 .env
 client/src/styles.css
 *.log
+.claude/
