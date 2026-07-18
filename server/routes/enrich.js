@@ -315,4 +315,37 @@ router.post("/enrich", async (req, res) => {
   }
 });
 
+router.post("/linear/issues", async (req, res) => {
+  const title = typeof req.body?.title === "string" ? req.body.title.trim() : "";
+
+  if (!title) {
+    return res.status(400).json({ error: "A non-empty title is required." });
+  }
+
+  const linearToken = process.env.LINEAR_API_KEY?.trim();
+
+  if (!linearToken) {
+    return res.status(400).json({ error: "LINEAR_API_KEY is not configured." });
+  }
+
+  const description =
+    typeof req.body?.description === "string" && req.body.description.trim()
+      ? req.body.description.trim()
+      : undefined;
+
+  try {
+    const teamId = await getDefaultTeamId(linearToken);
+    const issue = await createIssue({ title, description, teamId }, linearToken);
+
+    return res.json({
+      id: issue.id,
+      identifier: issue.identifier,
+      url: issue.url,
+      state: issue.state,
+    });
+  } catch (error) {
+    return res.status(502).json({ error: getErrorMessage(error) });
+  }
+});
+
 export default router;

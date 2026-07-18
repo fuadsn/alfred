@@ -395,6 +395,35 @@ export default function App() {
     copyResetTimeoutRef.current = setTimeout(() => setCopyStatus("idle"), 1_800);
   };
 
+  const handleLinearIssueCreated = (itemIndex, issue) => {
+    setDebriefResult((currentResult) => {
+      const currentItem = currentResult?.items?.[itemIndex];
+
+      if (!currentItem || currentItem.category !== "action_item" || currentItem.linear?.action) {
+        return currentResult;
+      }
+
+      return {
+        ...currentResult,
+        items: currentResult.items.map((item, index) =>
+          index === itemIndex
+            ? {
+                ...item,
+                linear: {
+                  issue_id: issue.id,
+                  identifier: issue.identifier,
+                  url: issue.url,
+                  action: "created",
+                  confidence: 1,
+                },
+              }
+            : item,
+        ),
+      };
+    });
+    setCopyStatus("idle");
+  };
+
   return (
     <main className="min-h-screen bg-white font-body text-black">
       <div className="mx-auto max-w-7xl px-5 sm:px-8 lg:px-12">
@@ -656,6 +685,7 @@ export default function App() {
             isEnriching={isEnriching}
             enrichmentWarning={enrichmentWarning}
             onDismissEnrichmentWarning={() => setEnrichmentWarning("")}
+            onLinearIssueCreated={handleLinearIssueCreated}
           />
         )}
       </div>

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useRef, useState } from "react";
 
 export const RESULT_CATEGORIES = [
   {
@@ -72,6 +72,86 @@ export function assembleDraft(items, recapLine) {
   return lines.join("\n");
 }
 
+function CreateLinearIssueButton({ item, itemIndex, onCreated }) {
+  const [isCreating, setIsCreating] = useState(false);
+  const [error, setError] = useState("");
+  const isMountedRef = useRef(true);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  const handleCreate = async () => {
+    if (isCreating) {
+      return;
+    }
+
+    setIsCreating(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/linear/issues", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: item.text,
+          description: `From Alfred recap — "${item.source_quote}"`,
+        }),
+      });
+      const result = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(result?.error || "Issue creation failed.");
+      }
+
+      if (
+        typeof result?.id !== "string" ||
+        typeof result?.identifier !== "string" ||
+        typeof result?.url !== "string"
+      ) {
+        throw new Error("Issue creation returned an invalid response.");
+      }
+
+      if (isMountedRef.current) {
+        onCreated(itemIndex, result);
+      }
+    } catch (requestError) {
+      if (isMountedRef.current) {
+        setError(requestError instanceof Error ? requestError.message : "Issue creation failed.");
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setIsCreating(false);
+      }
+    }
+  };
+
+  return (
+    <div className="mt-4">
+      <button
+        type="button"
+        onClick={handleCreate}
+        disabled={isCreating}
+        className="inline-flex min-h-11 items-center justify-center border border-black bg-white px-3 py-2 font-mono text-[10px] font-semibold uppercase tracking-widest text-black transition-colors duration-100 hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
+      >
+        {isCreating ? "CREATING…" : "CREATE ISSUE →"}
+      </button>
+      {error && (
+        <p
+          role="alert"
+          className="mt-2 font-mono text-[10px] font-medium uppercase leading-relaxed tracking-widest text-black group-hover:text-white"
+        >
+          {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function Results({
   result,
   copyStatus,
@@ -79,6 +159,7 @@ export default function Results({
   isEnriching = false,
   enrichmentWarning = "",
   onDismissEnrichmentWarning,
+  onLinearIssueCreated,
 }) {
   const items = Array.isArray(result.items) ? result.items : [];
   const groupedItems = groupItems(items);
@@ -162,6 +243,7 @@ export default function Results({
               <div className="mt-4 space-y-3">
                 {categoryItems.length > 0 ? (
                   categoryItems.map((item, index) => {
+                    const itemIndex = items.indexOf(item);
                     const linearAction = item.linear?.action;
                     const linearStyle = LINEAR_ACTION_STYLES[linearAction];
                     const confidence = Math.round(
@@ -199,6 +281,13 @@ export default function Results({
                               {confidence}%
                             </span>
                           </div>
+                        )}
+                        {category.key === "action_item" && !linearAction && (
+                          <CreateLinearIssueButton
+                            item={item}
+                            itemIndex={itemIndex}
+                            onCreated={onLinearIssueCreated}
+                          />
                         )}
                         <p className="mt-4 text-base leading-relaxed text-muted-foreground group-hover:text-white">
                           <span className="font-mono text-[10px] font-semibold uppercase tracking-widest text-black group-hover:text-white">
