@@ -21,6 +21,12 @@ export const RESULT_CATEGORIES = [
   },
 ];
 
+const LINEAR_ACTION_STYLES = {
+  linked: "bg-cyan-400/10 text-cyan-300 ring-cyan-400/25",
+  created: "bg-emerald-400/10 text-emerald-300 ring-emerald-400/25",
+  updated: "bg-violet-400/10 text-violet-300 ring-violet-400/25",
+};
+
 export function groupItems(items) {
   const safeItems = Array.isArray(items) ? items : [];
 
@@ -44,7 +50,17 @@ export function assembleDraft(items, recapLine) {
   for (const { key, title } of RESULT_CATEGORIES) {
     const bullets = safeItems
       .filter((item) => item?.category === key && typeof item.text === "string")
-      .map((item) => item.text.trim())
+      .map((item) => {
+        const text = item.text.trim();
+        const linear = item.linear;
+        const hasLinearLink =
+          key === "action_item" &&
+          linear?.action &&
+          typeof linear.identifier === "string" &&
+          typeof linear.url === "string";
+
+        return hasLinearLink ? `${text} (${linear.identifier}: ${linear.url})` : text;
+      })
       .filter(Boolean)
       .map((text) => `- ${text}`);
 
@@ -56,7 +72,14 @@ export function assembleDraft(items, recapLine) {
   return lines.join("\n");
 }
 
-export default function Results({ result, copyStatus, onCopy }) {
+export default function Results({
+  result,
+  copyStatus,
+  onCopy,
+  isEnriching = false,
+  enrichmentWarning = "",
+  onDismissEnrichmentWarning,
+}) {
   const items = Array.isArray(result.items) ? result.items : [];
   const groupedItems = groupItems(items);
   const draft = assembleDraft(items, result.recap_line);
@@ -72,10 +95,41 @@ export default function Results({ result, copyStatus, onCopy }) {
             What came out of the session
           </h2>
         </div>
-        <span className="w-fit rounded-full bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-300 ring-1 ring-inset ring-slate-700">
-          {result.detected_language}
-        </span>
+        <div className="flex flex-wrap items-center gap-2">
+          {isEnriching && (
+            <span
+              role="status"
+              className="inline-flex items-center gap-2 rounded-full bg-cyan-400/10 px-3 py-1.5 text-xs font-semibold text-cyan-300 ring-1 ring-inset ring-cyan-400/20"
+            >
+              <span
+                aria-hidden="true"
+                className="h-3 w-3 animate-spin rounded-full border-2 border-cyan-300/40 border-t-cyan-300"
+              />
+              Linking to Linear…
+            </span>
+          )}
+          <span className="w-fit rounded-full bg-slate-800 px-3 py-1.5 text-xs font-semibold text-slate-300 ring-1 ring-inset ring-slate-700">
+            {result.detected_language}
+          </span>
+        </div>
       </div>
+
+      {enrichmentWarning && (
+        <div
+          role="alert"
+          className="mt-5 flex items-start justify-between gap-4 rounded-xl bg-amber-400/10 px-4 py-3 text-sm text-amber-200 ring-1 ring-inset ring-amber-400/20"
+        >
+          <span>{enrichmentWarning}</span>
+          <button
+            type="button"
+            onClick={onDismissEnrichmentWarning}
+            className="shrink-0 font-semibold text-amber-300 transition hover:text-amber-100"
+            aria-label="Dismiss Linear linking warning"
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
 
       <div className="mt-7 grid gap-5 lg:grid-cols-3">
         {RESULT_CATEGORIES.map((category) => {
@@ -100,22 +154,55 @@ export default function Results({ result, copyStatus, onCopy }) {
 
               <div className="mt-4 space-y-3">
                 {categoryItems.length > 0 ? (
-                  categoryItems.map((item, index) => (
-                    <article
-                      key={`${category.key}-${index}-${item.text}`}
-                      className="rounded-xl border border-slate-800 bg-slate-900/80 p-4"
-                    >
-                      <h4 className="text-base font-semibold leading-6 text-slate-100">
-                        {item.text}
-                      </h4>
-                      <p className="mt-3 text-sm leading-6 text-slate-400">
-                        <span className="font-semibold text-slate-300">why:</span> {item.reasoning}
-                      </p>
-                      <blockquote className="mt-3 border-l-2 border-slate-700 pl-3 text-sm italic leading-6 text-slate-500">
-                        “{item.source_quote}”
-                      </blockquote>
-                    </article>
-                  ))
+                  categoryItems.map((item, index) => {
+                    const linearAction = item.linear?.action;
+                    const linearStyle = LINEAR_ACTION_STYLES[linearAction];
+                    const confidence = Math.round(
+                      Math.max(0, Math.min(1, Number(item.linear?.confidence) || 0)) * 100,
+                    );
+
+                    return (
+                      <article
+                        key={`${category.key}-${index}-${item.text}`}
+                        className="rounded-xl border border-slate-800 bg-slate-900/80 p-4"
+                      >
+                        <h4 className="text-base font-semibold leading-6 text-slate-100">
+                          {item.text}
+                        </h4>
+                        {category.key === "action_item" && linearAction && linearStyle && (
+                          <div className="mt-3 flex flex-wrap items-center gap-2 text-xs">
+                            <span
+                              className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 font-semibold ring-1 ring-inset ${linearStyle}`}
+                            >
+                              <a
+                                href={item.linear.url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="underline decoration-current/40 underline-offset-2 hover:decoration-current"
+                              >
+                                {item.linear.identifier}
+                              </a>
+                              <span className="opacity-70">·</span>
+                              <span>{linearAction}</span>
+                            </span>
+                            <span
+                              title="Linear match confidence"
+                              className="text-[11px] font-medium text-slate-500"
+                            >
+                              {confidence}%
+                            </span>
+                          </div>
+                        )}
+                        <p className="mt-3 text-sm leading-6 text-slate-400">
+                          <span className="font-semibold text-slate-300">why:</span>{" "}
+                          {item.reasoning}
+                        </p>
+                        <blockquote className="mt-3 border-l-2 border-slate-700 pl-3 text-sm italic leading-6 text-slate-500">
+                          “{item.source_quote}”
+                        </blockquote>
+                      </article>
+                    );
+                  })
                 ) : (
                   <div className="rounded-xl border border-dashed border-slate-800 px-4 py-8 text-center text-sm text-slate-600">
                     None identified
@@ -126,6 +213,10 @@ export default function Results({ result, copyStatus, onCopy }) {
           );
         })}
       </div>
+
+      {typeof result.enrichment_notes === "string" && result.enrichment_notes.trim() && (
+        <p className="mt-4 text-sm leading-6 text-slate-500">{result.enrichment_notes.trim()}</p>
+      )}
 
       <div className="mt-8 border-t border-slate-800 pt-7">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
