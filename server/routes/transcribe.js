@@ -94,6 +94,7 @@ router.post("/transcribe", upload.single("audio"), async (req, res) => {
         {
           file: audioFile,
           model: "gpt-4o-transcribe",
+          language: "en",
         },
         {
           timeout: transcriptionTimeoutMs,
