@@ -1,3 +1,4 @@
+import { spawn } from "node:child_process";
 import path from "node:path";
 import { Router } from "express";
 import multer from "multer";
@@ -18,6 +19,51 @@ const allowedExtensions = new Set([
   ".ogg",
   ".opus",
 ]);
+
+export function remuxOpusToOgg(buffer) {
+  return new Promise((resolve) => {
+    const ffmpeg = spawn("ffmpeg", ["-i", "pipe:0", "-c:a", "copy", "-f", "ogg", "pipe:1"]);
+    const outputChunks = [];
+    const errorChunks = [];
+    let settled = false;
+
+    const fail = (message) => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      console.error(message);
+      resolve(null);
+    };
+
+    ffmpeg.stdout.on("data", (chunk) => outputChunks.push(chunk));
+    ffmpeg.stderr.on("data", (chunk) => errorChunks.push(chunk));
+    ffmpeg.stdin.on("error", () => {});
+
+    ffmpeg.once("error", (error) => {
+      const stderr = Buffer.concat(errorChunks).toString().trim();
+      fail(`ffmpeg opus remux failed: ${error.message}${stderr ? `\n${stderr}` : ""}`);
+    });
+
+    ffmpeg.once("close", (code) => {
+      if (settled) {
+        return;
+      }
+
+      if (code !== 0) {
+        const stderr = Buffer.concat(errorChunks).toString().trim();
+        fail(`ffmpeg opus remux exited with code ${code}${stderr ? `:\n${stderr}` : ""}`);
+        return;
+      }
+
+      settled = true;
+      resolve(Buffer.concat(outputChunks));
+    });
+
+    ffmpeg.stdin.end(buffer);
+  });
+}
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -47,9 +93,23 @@ router.post("/transcribe", upload.single("audio"), async (req, res) => {
   }
 
   try {
-    // TODO: Remux .opus here if the live format test shows OpenAI rejects it.
-    const audioFile = await toFile(req.file.buffer, req.file.originalname, {
-      type: req.file.mimetype,
+    const originalExtension = path.extname(req.file.originalname);
+    let audioBuffer = req.file.buffer;
+    let audioFilename = req.file.originalname;
+    let audioType = req.file.mimetype;
+
+    if (originalExtension.toLowerCase() === ".opus") {
+      const remuxedBuffer = await remuxOpusToOgg(req.file.buffer);
+
+      if (remuxedBuffer) {
+        audioBuffer = remuxedBuffer;
+        audioFilename = `${path.basename(req.file.originalname, originalExtension)}.ogg`;
+        audioType = "audio/ogg";
+      }
+    }
+
+    const audioFile = await toFile(audioBuffer, audioFilename, {
+      type: audioType,
     });
     const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
     const transcription = await openai.audio.transcriptions.create(
