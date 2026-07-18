@@ -1,5 +1,6 @@
 import express from "express";
 import multer from "multer";
+import debriefRouter from "./routes/debrief.js";
 import transcribeRouter from "./routes/transcribe.js";
 
 const app = express();
@@ -7,6 +8,7 @@ const port = process.env.PORT || 3001;
 
 app.use(express.json());
 app.use("/api", transcribeRouter);
+app.use("/api", debriefRouter);
 
 app.use((error, _req, res, _next) => {
   if (error instanceof multer.MulterError) {
