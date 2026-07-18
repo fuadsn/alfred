@@ -395,11 +395,42 @@ export default function App() {
     copyResetTimeoutRef.current = setTimeout(() => setCopyStatus("idle"), 1_800);
   };
 
-  const handleLinearIssueCreated = (itemIndex, issue) => {
+  const handleLinearIssueCreated = (itemIndex, issue, isSubIssue = false) => {
     setDebriefResult((currentResult) => {
       const currentItem = currentResult?.items?.[itemIndex];
 
-      if (!currentItem || currentItem.category !== "action_item" || currentItem.linear?.action) {
+      if (!currentItem || currentItem.category !== "action_item") {
+        return currentResult;
+      }
+
+      if (isSubIssue) {
+        if (!currentItem.linear?.action || currentItem.linear.sub_issue) {
+          return currentResult;
+        }
+
+        return {
+          ...currentResult,
+          items: currentResult.items.map((item, index) =>
+            index === itemIndex
+              ? {
+                  ...item,
+                  linear: {
+                    ...item.linear,
+                    sub_issue: {
+                      issue_id: issue.id,
+                      identifier: issue.identifier,
+                      title: issue.title,
+                      url: issue.url,
+                      state: issue.state,
+                    },
+                  },
+                }
+              : item,
+          ),
+        };
+      }
+
+      if (currentItem.linear?.action) {
         return currentResult;
       }
 

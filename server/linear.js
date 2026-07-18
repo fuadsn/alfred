@@ -152,7 +152,7 @@ export async function getDefaultTeamId(token) {
   return teamId;
 }
 
-export async function createIssue({ title, description, teamId }, token) {
+export async function createIssue({ title, description, teamId, parentId }, token) {
   const data = await linearRequest(
     `
       mutation CreateIssue($input: IssueCreateInput!) {
@@ -164,7 +164,7 @@ export async function createIssue({ title, description, teamId }, token) {
         }
       }
     `,
-    { input: { title, description, teamId } },
+    { input: { title, description, teamId, parentId } },
     token,
   );
 

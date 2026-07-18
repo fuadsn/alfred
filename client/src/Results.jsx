@@ -58,8 +58,19 @@ export function assembleDraft(items, recapLine) {
           linear?.action &&
           typeof linear.identifier === "string" &&
           typeof linear.url === "string";
+        const subIssue = linear?.sub_issue;
+        const hasSubIssueLink =
+          hasLinearLink &&
+          typeof subIssue?.identifier === "string" &&
+          typeof subIssue?.url === "string";
+        const parentSuffix = hasLinearLink
+          ? ` (${linear.identifier}: ${linear.url})`
+          : "";
+        const subIssueSuffix = hasSubIssueLink
+          ? ` (sub: ${subIssue.identifier}: ${subIssue.url})`
+          : "";
 
-        return hasLinearLink ? `${text} (${linear.identifier}: ${linear.url})` : text;
+        return `${text}${parentSuffix}${subIssueSuffix}`;
       })
       .filter(Boolean)
       .map((text) => `- ${text}`);
@@ -72,7 +83,7 @@ export function assembleDraft(items, recapLine) {
   return lines.join("\n");
 }
 
-function CreateLinearIssueButton({ item, itemIndex, onCreated }) {
+function CreateLinearIssueButton({ item, itemIndex, onCreated, parentId }) {
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState("");
   const isMountedRef = useRef(true);
@@ -100,6 +111,7 @@ function CreateLinearIssueButton({ item, itemIndex, onCreated }) {
         body: JSON.stringify({
           title: item.text,
           description: `From Alfred recap — "${item.source_quote}"`,
+          ...(parentId ? { parent_id: parentId } : {}),
         }),
       });
       const result = await response.json().catch(() => null);
@@ -118,7 +130,7 @@ function CreateLinearIssueButton({ item, itemIndex, onCreated }) {
       }
 
       if (isMountedRef.current) {
-        onCreated(itemIndex, result);
+        onCreated(itemIndex, result, Boolean(parentId));
       }
     } catch (requestError) {
       if (isMountedRef.current) {
@@ -139,7 +151,7 @@ function CreateLinearIssueButton({ item, itemIndex, onCreated }) {
         disabled={isCreating}
         className="inline-flex min-h-11 items-center justify-center border border-black bg-white px-3 py-2 font-mono text-[10px] font-semibold uppercase tracking-widest text-black transition-colors duration-100 hover:bg-black hover:text-white disabled:cursor-not-allowed disabled:bg-muted disabled:text-muted-foreground"
       >
-        {isCreating ? "CREATING…" : "CREATE ISSUE →"}
+        {isCreating ? "CREATING…" : parentId ? "ADD SUB-ISSUE →" : "CREATE ISSUE →"}
       </button>
       {error && (
         <p
@@ -147,6 +159,60 @@ function CreateLinearIssueButton({ item, itemIndex, onCreated }) {
           className="mt-2 font-mono text-[10px] font-medium uppercase leading-relaxed tracking-widest text-black group-hover:text-white"
         >
           {error}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function LinearIssueBadge({ linear, isSubIssue = false }) {
+  const linearAction = isSubIssue ? "created" : linear.action;
+  const linearStyle = LINEAR_ACTION_STYLES[linearAction];
+  const confidence = Math.round(
+    Math.max(0, Math.min(1, Number(linear.confidence) || 0)) * 100,
+  );
+
+  if (!linearStyle) {
+    return null;
+  }
+
+  return (
+    <div
+      className={`group/linear mt-4 border px-3 py-2 transition-colors duration-100 ${linearStyle}`}
+    >
+      <div className="flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap font-mono text-[10px] font-semibold uppercase tracking-widest">
+        {isSubIssue && (
+          <>
+            <span>Sub-issue</span>
+            <span className="opacity-70">·</span>
+          </>
+        )}
+        <a
+          href={linear.url}
+          target="_blank"
+          rel="noreferrer"
+          className="inline-flex min-h-11 items-center underline decoration-current/40 underline-offset-2 hover:decoration-current"
+        >
+          {linear.identifier}
+        </a>
+        <span className="opacity-70">·</span>
+        <span>{linearAction}</span>
+        {!isSubIssue && (
+          <>
+            <span className="opacity-70">·</span>
+            <span title="Linear match confidence">{confidence}%</span>
+          </>
+        )}
+        {linear.state && (
+          <>
+            <span className="opacity-70">·</span>
+            <span className="truncate">{linear.state}</span>
+          </>
+        )}
+      </div>
+      {linear.title && (
+        <p className="mt-1 truncate font-body text-sm font-normal italic normal-case tracking-normal text-muted-foreground group-hover/linear:text-white">
+          {linear.title}
         </p>
       )}
     </div>
@@ -246,10 +312,6 @@ export default function Results({
                   categoryItems.map((item, index) => {
                     const itemIndex = items.indexOf(item);
                     const linearAction = item.linear?.action;
-                    const linearStyle = LINEAR_ACTION_STYLES[linearAction];
-                    const confidence = Math.round(
-                      Math.max(0, Math.min(1, Number(item.linear?.confidence) || 0)) * 100,
-                    );
 
                     return (
                       <article
@@ -259,36 +321,11 @@ export default function Results({
                         <h4 className="text-lg font-semibold leading-snug">
                           {item.text}
                         </h4>
-                        {category.key === "action_item" && linearAction && linearStyle && (
-                          <div
-                            className={`group/linear mt-4 border px-3 py-2 transition-colors duration-100 ${linearStyle}`}
-                          >
-                            <div className="flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap font-mono text-[10px] font-semibold uppercase tracking-widest">
-                              <a
-                                href={item.linear.url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex min-h-11 items-center underline decoration-current/40 underline-offset-2 hover:decoration-current"
-                              >
-                                {item.linear.identifier}
-                              </a>
-                              <span className="opacity-70">·</span>
-                              <span>{linearAction}</span>
-                              <span className="opacity-70">·</span>
-                              <span title="Linear match confidence">{confidence}%</span>
-                              {item.linear.state && (
-                                <>
-                                  <span className="opacity-70">·</span>
-                                  <span className="truncate">{item.linear.state}</span>
-                                </>
-                              )}
-                            </div>
-                            {item.linear.title && (
-                              <p className="mt-1 truncate font-body text-sm font-normal italic normal-case tracking-normal text-muted-foreground group-hover/linear:text-white">
-                                {item.linear.title}
-                              </p>
-                            )}
-                          </div>
+                        {category.key === "action_item" && linearAction && (
+                          <LinearIssueBadge linear={item.linear} />
+                        )}
+                        {category.key === "action_item" && item.linear?.sub_issue && (
+                          <LinearIssueBadge linear={item.linear.sub_issue} isSubIssue />
                         )}
                         {category.key === "action_item" && !linearAction && (
                           <CreateLinearIssueButton
@@ -297,6 +334,16 @@ export default function Results({
                             onCreated={onLinearIssueCreated}
                           />
                         )}
+                        {category.key === "action_item" &&
+                          linearAction &&
+                          !item.linear.sub_issue && (
+                            <CreateLinearIssueButton
+                              item={item}
+                              itemIndex={itemIndex}
+                              onCreated={onLinearIssueCreated}
+                              parentId={item.linear.issue_id}
+                            />
+                          )}
                         <p className="mt-4 text-base leading-relaxed text-muted-foreground group-hover:text-white">
                           <span className="font-mono text-[10px] font-semibold uppercase tracking-widest text-black group-hover:text-white">
                             why:

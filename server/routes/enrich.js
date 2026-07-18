@@ -336,10 +336,14 @@ router.post("/linear/issues", async (req, res) => {
     typeof req.body?.description === "string" && req.body.description.trim()
       ? req.body.description.trim()
       : undefined;
+  const parentId =
+    typeof req.body?.parent_id === "string" && req.body.parent_id.trim()
+      ? req.body.parent_id.trim()
+      : undefined;
 
   try {
     const teamId = await getDefaultTeamId(linearToken);
-    const issue = await createIssue({ title, description, teamId }, linearToken);
+    const issue = await createIssue({ title, description, teamId, parentId }, linearToken);
 
     return res.json({
       id: issue.id,
