@@ -2,6 +2,27 @@ import React, { useEffect, useRef, useState } from "react";
 import Results from "./Results.jsx";
 
 const acceptedAudioFormats = ".mp3,.wav,.m4a,.mp4,.ogg,.opus,.webm";
+const linearApiKeyStorageKey = "linear_api_key";
+
+function getStoredLinearApiKey() {
+  try {
+    return window.localStorage.getItem(linearApiKeyStorageKey) || "";
+  } catch {
+    return "";
+  }
+}
+
+function storeLinearApiKey(apiKey) {
+  try {
+    if (apiKey) {
+      window.localStorage.setItem(linearApiKeyStorageKey, apiKey);
+    } else {
+      window.localStorage.removeItem(linearApiKeyStorageKey);
+    }
+  } catch {
+    // The setting remains usable for this session when storage is unavailable.
+  }
+}
 
 function getRecordingMimeType() {
   if (MediaRecorder.isTypeSupported("audio/webm")) {
@@ -36,9 +57,12 @@ export default function App() {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [isThinking, setIsThinking] = useState(false);
+  const [isEnriching, setIsEnriching] = useState(false);
   const [recordingError, setRecordingError] = useState("");
   const [requestError, setRequestError] = useState("");
+  const [enrichmentWarning, setEnrichmentWarning] = useState("");
   const [copyStatus, setCopyStatus] = useState("idle");
+  const [linearApiKey, setLinearApiKey] = useState(getStoredLinearApiKey);
   const mediaRecorderRef = useRef(null);
   const mediaStreamRef = useRef(null);
   const audioChunksRef = useRef([]);
@@ -128,6 +152,40 @@ export default function App() {
     }
   };
 
+  useEffect(() => {
+    const handleGlobalKeyDown = (event) => {
+      const isSpace = event.code === "Space" || event.key === " ";
+
+      if (!isSpace || event.repeat) {
+        return;
+      }
+
+      const activeElement = document.activeElement;
+      const activeTagName = activeElement?.tagName;
+      const isEditable =
+        ["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(activeTagName) ||
+        activeElement?.isContentEditable;
+
+      if (isEditable) {
+        return;
+      }
+
+      event.preventDefault();
+
+      if (isRecording) {
+        stopRecording();
+      } else {
+        startRecording();
+      }
+    };
+
+    window.addEventListener("keydown", handleGlobalKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleGlobalKeyDown);
+    };
+  }, [isRecording]);
+
   const handleFileChange = (event) => {
     const file = event.target.files?.[0];
 
@@ -164,6 +222,7 @@ export default function App() {
 
       setTranscript(result.transcript);
       setDebriefResult(null);
+      setEnrichmentWarning("");
       setCopyStatus("idle");
     } catch (error) {
       setRequestError(error instanceof Error ? error.message : "Transcription failed.");
@@ -175,8 +234,16 @@ export default function App() {
   const handleTranscriptChange = (event) => {
     setTranscript(event.target.value);
     setDebriefResult(null);
+    setEnrichmentWarning("");
     setCopyStatus("idle");
     setRequestError("");
+  };
+
+  const handleLinearApiKeyChange = (event) => {
+    const apiKey = event.target.value;
+
+    setLinearApiKey(apiKey);
+    storeLinearApiKey(apiKey);
   };
 
   const handleCreateDebrief = async () => {
@@ -187,6 +254,7 @@ export default function App() {
     }
 
     setRequestError("");
+    setEnrichmentWarning("");
     setDebriefResult(null);
     setIsThinking(true);
 
@@ -200,6 +268,52 @@ export default function App() {
 
       setDebriefResult(result);
       setCopyStatus("idle");
+      setIsThinking(false);
+
+      const apiKey = linearApiKey.trim();
+
+      if (apiKey) {
+        setIsEnriching(true);
+
+        try {
+          const enrichResponse = await fetch("/api/enrich", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "X-Linear-Api-Key": apiKey,
+            },
+            body: JSON.stringify({
+              items: result.items,
+              recap_line: result.recap_line,
+              detected_language: result.detected_language,
+            }),
+          });
+          const enrichedResult = await readApiResponse(
+            enrichResponse,
+            "The enrichment request failed.",
+          );
+
+          if (!Array.isArray(enrichedResult?.items)) {
+            throw new Error("The Linear linking service returned no items.");
+          }
+
+          setDebriefResult((currentResult) =>
+            currentResult === result
+              ? {
+                  ...result,
+                  ...enrichedResult,
+                  items: enrichedResult.items,
+                }
+              : currentResult,
+          );
+        } catch (error) {
+          setEnrichmentWarning(
+            `Linear linking failed: ${error instanceof Error ? error.message : "Unknown error."}`,
+          );
+        } finally {
+          setIsEnriching(false);
+        }
+      }
     } catch (error) {
       setRequestError(error instanceof Error ? error.message : "Debrief generation failed.");
     } finally {
@@ -237,6 +351,39 @@ export default function App() {
             editable workspace before the debrief is created.
           </p>
         </header>
+
+        <details className="group mx-auto mt-6 max-w-3xl rounded-xl border border-slate-800 bg-slate-900/50">
+          <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-4 py-3 text-sm font-medium text-slate-300 [&::-webkit-details-marker]:hidden">
+            <span>Settings</span>
+            <span className="flex items-center gap-2 text-xs text-slate-500">
+              Linear
+              <span
+                aria-hidden="true"
+                className="text-sm transition-transform group-open:rotate-180"
+              >
+                ▾
+              </span>
+            </span>
+          </summary>
+          <div className="border-t border-slate-800 px-4 py-4">
+            <label htmlFor="linear-api-key" className="text-sm font-medium text-slate-300">
+              Linear API key
+            </label>
+            <input
+              id="linear-api-key"
+              type="password"
+              value={linearApiKey}
+              onChange={handleLinearApiKeyChange}
+              autoComplete="off"
+              spellCheck="false"
+              placeholder="lin_api_…"
+              className="mt-2 w-full rounded-lg border border-slate-700 bg-slate-950/70 px-3 py-2 text-sm text-slate-100 outline-none transition placeholder:text-slate-600 focus:border-cyan-400 focus:ring-2 focus:ring-cyan-400/20"
+            />
+            <p className="mt-1.5 text-xs text-slate-500">
+              Stored locally, sent only to your own server.
+            </p>
+          </div>
+        </details>
 
         <div className="mt-10 grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
           <section className="rounded-3xl border border-slate-800 bg-slate-900/70 p-6 shadow-2xl shadow-black/20 sm:p-7">
@@ -282,6 +429,7 @@ export default function App() {
                       Start recording
                     </button>
                   )}
+                  <p className="mt-2 text-center text-xs text-slate-500">or press Space</p>
                 </div>
               </div>
 
@@ -415,6 +563,9 @@ export default function App() {
             result={debriefResult}
             copyStatus={copyStatus}
             onCopy={handleCopyDraft}
+            isEnriching={isEnriching}
+            enrichmentWarning={enrichmentWarning}
+            onDismissEnrichmentWarning={() => setEnrichmentWarning("")}
           />
         )}
       </div>
