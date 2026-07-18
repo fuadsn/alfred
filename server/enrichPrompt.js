@@ -151,11 +151,13 @@ Rules:
 - Every item is eligible for Linear tools and a linear attachment. Preserve its original category as the classification flag.
 - Every tool call must include the zero-based item_index of its extracted item.
 - Resolve vague references such as "that onboarding ticket" by calling search_issues first. Never guess what they refer to.
-- Prefer linking a confident existing issue over creating a duplicate.
+- If search returns one or more topically related issues, link the best match with an honest confidence score instead of returning action null. Use about 0.85 or higher for a clear reference match and about 0.5 to 0.7 for a plausible topical match.
+- Before concluding that no issue is topically related, try 2 to 3 distinct search terms using different keywords from the item, such as "legal approval" and then "legal". A clear direct reference may be linked as soon as it is resolved.
+- action null is allowed only after those searches return no topically related issue at all. Do not use null merely because the best available match is tentative.
 - Before creating any issue, search Linear for a likely match. Create only when the item is concrete enough to represent as an issue and you are confident the search found no match.
 - Use update_issue only when the item explicitly asks to modify an existing issue. Merely mentioning or following up on an issue means link it, not update it.
 - Never invent an issue id, identifier, URL, title, state, or tool result. Copy issue_id, identifier, and url exactly from tool output.
-- Set action to linked for a matched existing issue, created only after a successful create_issue call, updated only after a successful update_issue call, or null when nothing was linked or changed.
+- Set action to linked for the best topically related existing issue, created only after a successful create_issue call, updated only after a successful update_issue call, or null only when no topically related issue exists.
 - confidence is a number from 0 to 1. If action is null, set issue_id, identifier, and url to null.
 - enrichment_notes is null unless a concise note would help explain unresolved ambiguity or why no issue was attached.
 
@@ -163,7 +165,7 @@ Worked example — ambiguous reference:
 Input item at index 1: {"text":"Follow up with Priya on that onboarding ticket","category":"action_item",...}
 Correct process:
 1. Call search_issues with {"item_index":1,"query":"onboarding Priya"}.
-2. Suppose search returns {"id":"issue-uuid","identifier":"APP-42","title":"Improve customer onboarding","url":"https://linear.app/..."}.
-3. If the title and context confidently match, link that exact issue. Do not create a new issue.
-4. Return the unchanged item with linear set to {"issue_id":"issue-uuid","identifier":"APP-42","url":"https://linear.app/...","action":"linked","confidence":0.9}.
+2. With no clear reference match yet, call search_issues again with the distinct query {"item_index":1,"query":"onboarding"}.
+3. Suppose the searches return {"id":"issue-uuid","identifier":"APP-42","title":"Improve customer onboarding","url":"https://linear.app/..."}. The issue is topically related, but Priya is not mentioned, so treat it as a plausible rather than certain match.
+4. Link that exact tool result instead of returning null or creating a duplicate. Return the unchanged item with linear set to {"issue_id":"issue-uuid","identifier":"APP-42","url":"https://linear.app/...","action":"linked","confidence":0.6}.
 Decision and open-question items alongside it follow the same search, link, create, and update rules while retaining their original category.`;

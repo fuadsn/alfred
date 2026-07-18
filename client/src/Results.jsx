@@ -179,9 +179,9 @@ function CreateLinearIssueButton({ item, itemIndex, onCreated, parentId }) {
 function LinearIssueBadge({ linear, isSubIssue = false }) {
   const linearAction = isSubIssue ? "created" : linear.action;
   const linearStyle = LINEAR_ACTION_STYLES[linearAction];
-  const confidence = Math.round(
-    Math.max(0, Math.min(1, Number(linear.confidence) || 0)) * 100,
-  );
+  const normalizedConfidence = Math.max(0, Math.min(1, Number(linear.confidence) || 0));
+  const confidence = Math.round(normalizedConfidence * 100);
+  const isTentative = !isSubIssue && normalizedConfidence < 0.7;
 
   if (!linearStyle) {
     return null;
@@ -189,7 +189,7 @@ function LinearIssueBadge({ linear, isSubIssue = false }) {
 
   return (
     <div
-      className={`group/linear mt-4 border px-3 py-2 transition-colors duration-100 ${linearStyle}`}
+      className={`group/linear mt-4 border px-3 py-2 transition-colors duration-100 ${isTentative ? "border-dashed" : "border-solid"} ${linearStyle}`}
     >
       <div className="flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap font-mono text-[10px] font-semibold uppercase tracking-widest">
         {isSubIssue && (
@@ -212,6 +212,12 @@ function LinearIssueBadge({ linear, isSubIssue = false }) {
           <>
             <span className="opacity-70">·</span>
             <span title="Linear match confidence">{confidence}%</span>
+            {isTentative && (
+              <>
+                <span className="opacity-70">·</span>
+                <span>Tentative</span>
+              </>
+            )}
           </>
         )}
         {linear.state && (
