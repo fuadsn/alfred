@@ -412,7 +412,9 @@ export default function App() {
                 linear: {
                   issue_id: issue.id,
                   identifier: issue.identifier,
+                  title: issue.title,
                   url: issue.url,
+                  state: issue.state,
                   action: "created",
                   confidence: 1,
                 },

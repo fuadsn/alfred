@@ -1,4 +1,4 @@
-// Action items in a POST /api/enrich response carry `linear: { issue_id, identifier, url, action: "linked" | "created" | "updated" | null, confidence }`.
+// Action items in a POST /api/enrich response carry `linear: { issue_id, identifier, title, url, state, action: "linked" | "created" | "updated" | null, confidence }`.
 
 import { Router } from "express";
 import OpenAI from "openai";
@@ -93,7 +93,9 @@ function buildEnrichedResult(items, modelResult, observedIssues) {
         linear: {
           issue_id: null,
           identifier: null,
+          title: null,
           url: null,
+          state: null,
           action: null,
           confidence,
         },
@@ -111,7 +113,9 @@ function buildEnrichedResult(items, modelResult, observedIssues) {
       linear: {
         issue_id: observed.issue.id,
         identifier: observed.issue.identifier,
+        title: observed.issue.title,
         url: observed.issue.url,
+        state: observed.issue.state,
         action: observed.action,
         confidence,
       },
@@ -340,6 +344,7 @@ router.post("/linear/issues", async (req, res) => {
     return res.json({
       id: issue.id,
       identifier: issue.identifier,
+      title: issue.title,
       url: issue.url,
       state: issue.state,
     });

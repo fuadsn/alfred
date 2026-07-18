@@ -111,6 +111,7 @@ function CreateLinearIssueButton({ item, itemIndex, onCreated }) {
       if (
         typeof result?.id !== "string" ||
         typeof result?.identifier !== "string" ||
+        typeof result?.title !== "string" ||
         typeof result?.url !== "string"
       ) {
         throw new Error("Issue creation returned an invalid response.");
@@ -259,10 +260,10 @@ export default function Results({
                           {item.text}
                         </h4>
                         {category.key === "action_item" && linearAction && linearStyle && (
-                          <div className="mt-4 flex flex-wrap items-center gap-2 font-mono text-[10px] uppercase tracking-widest">
-                            <span
-                              className={`inline-flex items-center gap-1.5 border px-2.5 py-1 font-semibold transition-colors duration-100 ${linearStyle}`}
-                            >
+                          <div
+                            className={`group/linear mt-4 border px-3 py-2 transition-colors duration-100 ${linearStyle}`}
+                          >
+                            <div className="flex min-w-0 items-center gap-1.5 overflow-hidden whitespace-nowrap font-mono text-[10px] font-semibold uppercase tracking-widest">
                               <a
                                 href={item.linear.url}
                                 target="_blank"
@@ -273,13 +274,20 @@ export default function Results({
                               </a>
                               <span className="opacity-70">·</span>
                               <span>{linearAction}</span>
-                            </span>
-                            <span
-                              title="Linear match confidence"
-                              className="text-[10px] font-medium text-muted-foreground group-hover:text-white"
-                            >
-                              {confidence}%
-                            </span>
+                              <span className="opacity-70">·</span>
+                              <span title="Linear match confidence">{confidence}%</span>
+                              {item.linear.state && (
+                                <>
+                                  <span className="opacity-70">·</span>
+                                  <span className="truncate">{item.linear.state}</span>
+                                </>
+                              )}
+                            </div>
+                            {item.linear.title && (
+                              <p className="mt-1 truncate font-body text-sm font-normal italic normal-case tracking-normal text-muted-foreground group-hover/linear:text-white">
+                                {item.linear.title}
+                              </p>
+                            )}
                           </div>
                         )}
                         {category.key === "action_item" && !linearAction && (
